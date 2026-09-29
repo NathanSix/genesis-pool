@@ -51,7 +51,7 @@ section h2{font-family:var(--serif);font-weight:400;font-size:17px;margin:0;text
 .pill button[aria-pressed="true"]{background:var(--rule2);color:var(--ink)}
 .pill button.go{color:var(--ink);font-family:var(--sans);font-weight:500;min-width:74px}
 .pill button.warn{color:var(--coral)}
-.hint{position:absolute;right:12px;bottom:14px;font-size:11.5px;color:var(--faint);pointer-events:none}
+.hint{position:absolute;right:12px;top:10px;font-size:11.5px;color:var(--faint);pointer-events:none}
 .catch{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(340px,calc(100% - 32px));background:rgba(9,29,35,.94);border:1px solid var(--rule2);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;text-align:center}
 .catch p{margin:0;font-family:var(--serif);font-size:16px}
 .catch small{color:var(--dim);font-size:12px}
@@ -73,7 +73,7 @@ section h2{font-family:var(--serif);font-weight:400;font-size:17px;margin:0;text
 .inspect .row button:hover{background:var(--rule2)}
 .inspect .dead{color:var(--coral);font-size:12.5px}
 .brain{margin:0;display:flex;flex-direction:column;gap:4px}
-.brain canvas{width:100%;height:auto;aspect-ratio:8/5;background:var(--sea);border-radius:8px;display:block}
+.brain canvas{width:100%;height:auto;aspect-ratio:48/34;background:var(--sea);border-radius:8px;display:block}
 .brain figcaption{font-size:11.5px;color:var(--dim)}
 .chron li.catastrophe p{color:var(--coral);font-family:var(--serif);font-size:15px}
 .chron li.stage p{font-family:var(--serif);font-size:15px;color:var(--ink)}
@@ -146,7 +146,7 @@ section h2{font-family:var(--serif);font-weight:400;font-size:17px;margin:0;text
       <div><dt>Species</dt><dd id="sSpc">0</dd></div>
       <div><dt>Oxygen</dt><dd id="sOxy">0%</dd></div>
       <div><dt>Generations</dt><dd id="sGen">0</dd></div>
-      <div><dt>Mean sea temp</dt><dd id="sTemp">0</dd></div>
+      <div><dt>Top complexity</dt><dd id="sCx">0</dd></div>
     </dl>
   </header>
 
@@ -157,9 +157,10 @@ section h2{font-family:var(--serif);font-weight:400;font-size:17px;margin:0;text
       <div class="hud">
         <div class="pill"><button id="play" class="go" type="button">Pause</button></div>
         <div class="pill" id="speeds" role="group" aria-label="Pace"></div>
+        <div class="pill"><button id="zoom" type="button">Zoom in</button></div>
         <div class="pill"><button id="reset" type="button">New world</button></div>
       </div>
-      <div class="hint">Click any organism to inspect it</div>
+      <div class="hint">Click an organism to inspect it · double-click to zoom · drag to look around</div>
       <div class="catch" id="catch" hidden><p>The sea kept evolving while you were away</p><div class="bar"><i id="catchBar" style="width:0%"></i></div><small id="catchNote">Catching up</small></div>
     </div>
       <div class="inspect" id="inspect" hidden>
@@ -170,7 +171,7 @@ section h2{font-family:var(--serif);font-weight:400;font-size:17px;margin:0;text
         <div class="dead" id="iDead" hidden>This individual has died.</div>
         <div><div class="bar"><i id="iEnergy"></i></div></div>
         <dl id="iStats"></dl>
-        <figure class="brain"><canvas id="brainCv" width="480" height="300"></canvas><figcaption id="brainCap">Nervous system</figcaption></figure>
+        <figure class="brain"><canvas id="brainCv" width="480" height="340"></canvas><figcaption id="brainCap">Nervous system</figcaption></figure>
         <div class="row"><button id="iFollow" type="button">Follow</button><button id="iClose" type="button">Close</button></div>
       </div>
     </div>
@@ -202,68 +203,81 @@ section h2{font-family:var(--serif);font-weight:400;font-size:17px;margin:0;text
 const W = 1100, H = 700, CELL = 70, TC = 20;
 const GW = Math.ceil(W / CELL), GH = Math.ceil(H / CELL);
 const TW = Math.ceil(W / TC), TH = Math.ceil(H / TC);
-const MAXC = 600, MAXP = 1400, MAXMEAT = 400, K = 0.07;
-const YPT = 10000; // years per tick
+const MAXC = 420, MAXP = 1400, MAXMEAT = 400, K = 0.07;
+const YPT = 30000; // years per tick
 const TAU = Math.PI * 2;
 
 /* ---------- genome layout ---------- */
-const GENES = { size: [0.4, 5], speed: [0.15, 3], sense: [0, 1], diet: [0, 1], armor: [0, 1], tpref: [-1.2, 1.2], litter: [0, 1], terr: [0, 1] };
+// continuous genes; body parts come from the segment list
+const GENES = { size: [0.4, 3], diet: [0, 1], tpref: [-1.2, 1.2], litter: [0, 1], terr: [0, 1] };
 const GK = Object.keys(GENES);
-const DWT = { size: 1, speed: 1, sense: 1, diet: 1.5, armor: 1, tpref: 0.8, litter: 0.5, terr: 1.2 };
+const DWT = { size: 1, diet: 1.5, tpref: 0.8, litter: 0.5, terr: 1.2 };
+// segment types
+const SEG = ['body', 'fin', 'leg', 'eye', 'jaw', 'shell', 'spine', 'fat', 'feeler'];
+const S_BODY = 0, S_FIN = 1, S_LEG = 2, S_EYE = 3, S_JAW = 4, S_SHELL = 5, S_SPINE = 6, S_FAT = 7, S_FEEL = 8, NSEG = 9;
+const MAXSEG = 12;
 const PGENES = { grow: [0.1, 1.5], tough: [0, 1], spread: [0, 1], tpref: [-1.2, 1.2], landTol: [0, 1] };
 const PK = Object.keys(PGENES);
-const SPECIATE = 0.2;
+const SPECIATE = 0.17;
 
-// brain: 14 sensors -> 6 hidden (tanh) -> 2 motor outputs, plus direct sensor->motor links
-const NI = 14, NH = 6, NO = 2;
-const O1 = 0, O2 = NI * NH, O3 = O2 + NH * NO, NB = O3 + NI * NO;
-const IN_LABELS = ['bias', 'food dir', 'food near', 'prey dir', 'prey near', 'threat dir', 'threat near', 'kin dir', 'kin near', 'energy', 'comfort dir', 'bad ground', 'rhythm', 'noise'];
+// brain: 18 senses -> growable hidden neurons with self-memory -> 3 outputs, plus direct links
+const NI = 18, NO = 3, MAXH = 16;
+const IN_LABELS = ['bias', 'food dir', 'food near', 'prey dir', 'prey near', 'threat dir', 'threat near', 'kin dir', 'kin near', 'mate dir', 'mate near', 'energy', 'comfort dir', 'bad ground', 'rhythm', 'noise', 'signal dir', 'signal level'];
+const OUT_LABELS = ['turn', 'speed', 'signal'];
 function seedBrain() {
-  const b = new Array(NB).fill(0);
-  const d = (i, k, v) => { b[O3 + i * NO + k] = v; };
-  // turning instincts
-  d(1, 0, 2.5); d(3, 0, 3.0); d(5, 0, -3.0); d(7, 0, 0.3); d(10, 0, 0.8); d(11, 0, 1.6); d(13, 0, 0.8);
-  // thrust instincts
-  d(0, 1, 0.3); d(6, 1, 2.0); d(4, 1, 1.0); d(2, 1, -0.2); d(11, 1, -0.6);
-  return b;
+  const wd = new Array(NI * NO).fill(0);
+  const d = (i, k, v) => { wd[i * NO + k] = v; };
+  d(1, 0, 2.5); d(3, 0, 3.0); d(5, 0, -3.0); d(7, 0, 0.3); d(9, 0, 2.5); d(12, 0, 0.8); d(13, 0, 1.6); d(15, 0, 0.8);
+  d(0, 1, 0.3); d(6, 1, 2.0); d(4, 1, 1.0); d(2, 1, -0.2); d(13, 1, -0.6);
+  d(0, 2, -2.0);
+  return { wd, h: [] };
 }
-const PROTO = { size: 0.6, speed: 0.35, sense: 0.08, diet: 0.02, armor: 0, tpref: 0, litter: 0.2, terr: 0 };
+function cloneBrain(b) { return { wd: b.wd.slice(), h: b.h.map(n => ({ i: n.i.slice(), o: n.o.slice(), s: n.s })) }; }
+function links(b) {
+  let n = 0;
+  for (const w of b.wd) if (w !== 0) n++;
+  for (const nr of b.h) { for (const w of nr.i) if (w !== 0) n++; for (const w of nr.o) if (w !== 0) n++; if (nr.s !== 0) n++; }
+  return n;
+}
+function activeNeurons(b) { let n = 0; for (const nr of b.h) if (nr.i.some(w => w !== 0) && nr.o.some(w => w !== 0)) n++; return n; }
+function memoryNeurons(b) { let n = 0; for (const nr of b.h) if (nr.s !== 0 && nr.i.some(w => w !== 0) && nr.o.some(w => w !== 0)) n++; return n; }
+function hiddenUsed(b) { return activeNeurons(b); }
+const SEED_LINKS = links(seedBrain());
+function segCounts(segs) { const c = new Array(NSEG).fill(0); for (const s of segs) c[s]++; return c; }
+function complexity(g) {
+  const c = segCounts(g.segs); let kinds = 0; for (let t = 1; t < NSEG; t++) if (c[t]) kinds++;
+  return g.segs.length + kinds * 2 + activeNeurons(g.B) * 1.5 + memoryNeurons(g.B) + links(g.B) / 8;
+}
+const PROTO = { size: 0.6, diet: 0.02, tpref: 0, litter: 0.2, terr: 0 };
+const PROTO_SEGS = [S_BODY, S_FIN];
 const PPROTO = { grow: 0.6, tough: 0, spread: 0.4, tpref: 0, landTol: 0 };
 
 /* ---------- naming ---------- */
-const GENUS_A = ['Proto', 'Lumi', 'Cteno', 'Vorti', 'Plani', 'Echino', 'Thalasso', 'Nemato', 'Cyano', 'Aulo', 'Pelago', 'Rhizo', 'Halo', 'Spiro', 'Litho', 'Bentho', 'Placo', 'Trocho', 'Acantho', 'Glauco', 'Chloro', 'Xeno', 'Myxo', 'Hydro', 'Coelo', 'Pyro', 'Cryo', 'Tricho', 'Anomalo', 'Opabi', 'Terra', 'Psammo', 'Ichno', 'Neuro'];
-const GENUS_B = ['cystis', 'phora', 'zoon', 'cella', 'morpha', 'nema', 'plax', 'coccus', 'ina', 'ella', 'opsis', 'cyon', 'ula', 'ites', 'aster', 'thrix', 'poda', 'soma', 'dendron', 'caris', 'pes', 'saurus'];
+const GENUS_A = ['Proto', 'Lumi', 'Cteno', 'Vorti', 'Plani', 'Echino', 'Thalasso', 'Nemato', 'Cyano', 'Aulo', 'Pelago', 'Rhizo', 'Halo', 'Spiro', 'Litho', 'Bentho', 'Placo', 'Trocho', 'Acantho', 'Glauco', 'Chloro', 'Xeno', 'Myxo', 'Hydro', 'Coelo', 'Pyro', 'Cryo', 'Tricho', 'Anomalo', 'Opabi', 'Terra', 'Psammo', 'Ichno', 'Neuro', 'Arthro', 'Cephalo', 'Ptero', 'Mega', 'Polymero', 'Ophthalmo'];
+const GENUS_B = ['cystis', 'phora', 'zoon', 'cella', 'morpha', 'nema', 'plax', 'coccus', 'ina', 'ella', 'opsis', 'cyon', 'ula', 'ites', 'aster', 'thrix', 'poda', 'soma', 'dendron', 'caris', 'pes', 'saurus', 'therium', 'gnathus', 'pteryx', 'mera'];
 const EPI = {
   eyes: ['oculata', 'videns', 'lucens', 'argus', 'vigilans'], fast: ['velox', 'celeris', 'natans', 'rapida', 'fugax'],
   big: ['magna', 'gigantea', 'robusta', 'major', 'grandis'], small: ['minima', 'parva', 'pusilla', 'nana', 'minuta'],
-  pred: ['vorax', 'rapax', 'ferox', 'edax', 'venatrix'], armor: ['armata', 'spinosa', 'horrida', 'echinata', 'loricata'],
+  pred: ['vorax', 'rapax', 'ferox', 'edax', 'venatrix'], armor: ['armata', 'testudo', 'loricata', 'scutata', 'clipeata'],
+  spine: ['spinosa', 'horrida', 'echinata', 'aculeata', 'hystrix'],
   warm: ['thermophila', 'calida', 'aestiva', 'tepida'], cold: ['cryophila', 'glacialis', 'hiemalis', 'frigida', 'borealis'],
   brood: ['fecunda', 'prolifera', 'multipara', 'fertilis'], graze: ['pascens', 'herbivora', 'mitis', 'placida'],
   land: ['terrestris', 'ambulans', 'pedata', 'arenicola', 'litoralis'], sea: ['aquatica', 'marina', 'pelagica', 'undosa'],
-  brain: ['callida', 'astuta', 'sagax', 'prudens', 'cogitans'], plain: ['vulgaris', 'simplex', 'communis', 'errans', 'vagans']
+  brain: ['callida', 'astuta', 'sagax', 'prudens', 'cogitans'], seg: ['segmentata', 'multiplex', 'catenata', 'longa', 'annulata'],
+  fat: ['obesa', 'pinguis', 'crassa', 'adiposa'], feel: ['antennata', 'tentans', 'palpans', 'cornuta'],
+  plain: ['vulgaris', 'simplex', 'communis', 'errans', 'vagans']
 };
 const PHRASE = {
-  eyes: 'with sharper senses', fast: 'built for speed', big: 'with a larger body', small: 'with a smaller, cheaper body',
-  pred: 'turning toward predation', armor: 'growing defensive spines', warm: 'adapted to warmer water', cold: 'adapted to colder water',
-  brood: 'producing larger broods', graze: 'returning to grazing', land: 'moving onto land', sea: 'returning to the water',
-  brain: 'with a more elaborate nervous system', plain: 'drifting apart genetically'
+  eyes: 'with more eyes', fast: 'built for speed', big: 'with a larger body', small: 'with a smaller, cheaper body',
+  pred: 'turning toward predation', armor: 'growing a protective shell', spine: 'growing defensive spines',
+  warm: 'adapted to warmer water', cold: 'adapted to colder water', brood: 'producing larger broods', graze: 'returning to grazing',
+  land: 'moving onto land', sea: 'returning to the water', brain: 'with a more elaborate brain', seg: 'with a longer, segmented body',
+  fat: 'storing fat for lean times', feel: 'sprouting feelers', plain: 'drifting apart genetically'
 };
 
 const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
 function mulberry(seed) { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 function wrapA(a) { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; }
-function links(b) { let n = 0; for (let i = 0; i < NB; i++) if (b[i] !== 0) n++; return n; }
-function hiddenUsed(b) {
-  let n = 0;
-  for (let j = 0; j < NH; j++) {
-    let a = false, o = false;
-    for (let i = 0; i < NI; i++) if (b[O1 + i * NH + j] !== 0) { a = true; break; }
-    for (let k = 0; k < NO; k++) if (b[O2 + j * NO + k] !== 0) { o = true; break; }
-    if (a && o) n++;
-  }
-  return n;
-}
-const SEED_LINKS = links(seedBrain());
 
 class Sim {
   constructor(seed, snap) {
@@ -280,6 +294,7 @@ class Sim {
     this.vents = [];
     this.cumO = 0; this.oxygen = 0.03; this.oxyDip = 0;
     this.nextCatastrophe = 0; this.flash = null; this.terrainVer = 0;
+    this.record = { complexity: 0, name: null };
     this.fert = new Float32Array(TW * TH);
     this.buildTerrain();
     this.seaLevel = this.seaStart; this.seaFalling = false;
@@ -342,11 +357,12 @@ class Sim {
   tempAt(y) { return this.climate + 0.9 * (y / H * 2 - 1); }
 
   genesis(n, text) {
-    const sp = this.makeSpecies(null, Object.assign({}, PROTO), seedBrain());
+    const base = Object.assign({ segs: PROTO_SEGS.slice(), B: seedBrain() }, PROTO);
+    const sp = this.makeSpecies(null, base);
     sp.hue = this.recognized.length ? this.rng() * 360 : 28;
     for (let i = 0; i < n; i++) {
       const v = this.vents[i % this.vents.length];
-      const g = this.mutate(Object.assign({ B: seedBrain() }, PROTO));
+      const g = this.mutate(base);
       g.tpref = clamp(this.tempAt(v.y) + this.gauss() * 0.1, -1.2, 1.2);
       let x = clamp(v.x + this.gauss() * 60, 10, W - 10), y = clamp(v.y + this.gauss() * 60, 10, H - 10);
       if (this.isLand(x, y)) { x = v.x; y = v.y; }
@@ -356,41 +372,108 @@ class Sim {
   }
 
   log(text, kind, sp) {
+    if (kind === 'genesis' && this.events.length && this.events[this.events.length - 1].text === text) return;
     this.events.push({ t: this.t, text, kind, hue: sp ? sp.hue : null });
-    if (this.events.length > 140) this.events.shift();
+    if (this.events.length > 160) this.events.shift();
   }
 
-  makeSpecies(parent, g, B) {
+  makeSpecies(parent, g) {
     const f = {}; for (const k of GK) f[k] = g[k];
-    const sp = { id: this.spid++, parent, founder: f, fB: B.slice(), born: this.t, extinct: null, pop: 0, peak: 0, recognized: false, hue: 28, name: null, genus: null, mean: Object.assign({ links: links(B) }, f), rep: null, anc: null, _n: 0, _s: {} };
+    const sp = { id: this.spid++, parent, founder: f, fSegs: g.segs.slice(), fB: cloneBrain(g.B), born: this.t, extinct: null, pop: 0, peak: 0, recognized: false, hue: 28, name: null, genus: null, mean: this.meanOf([g]), rep: g, anc: null, packs: 0, alarmT: 0, alarmS: 0, calmT: 0, calmS: 0 };
     if (parent) { const sgn = this.rng() < 0.5 ? -1 : 1; sp.hue = (parent.hue + sgn * (22 + this.rng() * 50) + 360) % 360; }
     this.active.add(sp);
     return sp;
   }
+  meanOf(gs) {
+    const m = { segs: 0, links: 0, neurons: 0, memory: 0, cx: 0 }; for (const k of GK) m[k] = 0;
+    const cnt = new Array(NSEG).fill(0);
+    for (const g of gs) {
+      for (const k of GK) m[k] += g[k];
+      m.segs += g.segs.length; for (const s of g.segs) cnt[s]++;
+      m.links += links(g.B); m.neurons += activeNeurons(g.B); m.memory += memoryNeurons(g.B); m.cx += complexity(g);
+    }
+    const n = gs.length || 1;
+    for (const k in m) m[k] /= n;
+    m.count = cnt.map(v => v / n);
+    return m;
+  }
 
   makeCreature(g, x, y, sp, e, gen) {
-    const c = { id: this.nid++, x, y, a: this.rng() * TAU, g, sp, e, age: 0, gen, dead: false, cool: 0, ecool: 0, v: 0, ph: this.rng() * TAU, ate: 0, kills: 0, turnOut: 0 };
+    const c = { id: this.nid++, x, y, a: this.rng() * TAU, g, sp, e, age: 0, gen, dead: false, cool: 0, ecool: 0, rcool: 0, ready: 0, v: 0, ph: this.rng() * TAU, ate: 0, kills: 0, turnOut: 0, sig: 0, hit: null };
     this.derive(c);
-    c.maxAge = (900 + g.size * 450) * (0.8 + this.rng() * 0.4);
+    c.maxAge = (900 + c.mass * 380) * (0.8 + this.rng() * 0.4);
     c.e = Math.min(e, c.cap);
     if (gen > this.maxGen) this.maxGen = gen;
     return c;
   }
   derive(c) {
-    const g = c.g;
-    c.r = 2.2 + g.size * 3;
-    c.maxV = (0.3 + g.speed * 0.85) * (1 - g.armor * 0.35) / (0.8 + g.size * 0.2);
-    c.turn = (0.2 + g.speed * 0.05) / (0.75 + g.size * 0.25);
-    c.senseR = 10 + g.sense * 140 + c.r;
-    c.cap = 40 + 60 * g.size;
-    c.mature = 100 + g.size * 90;
-    c.links = links(g.B);
-    c.upkeep = K * (0.35 + 0.14 * Math.pow(g.size, 1.2) + 0.35 * g.sense + 0.25 * g.armor + 0.3 * g.speed + 0.08 * g.litter + 0.1 * g.terr + 0.004 * c.links);
-    c.moveK = K * 0.8 * (0.4 + 0.6 * g.size);
-    c.bite = 2 + g.size * 1.2;
-    c.body = 10 * g.size;
+    const g = c.g, n = segCounts(g.segs);
+    c.n = n; c.nSeg = g.segs.length;
+    c.mass = g.size * (0.7 + 0.3 * c.nSeg);
+    c.r = 1.2 + 3.2 * Math.pow(c.mass, 0.6);
+    // legs paddle a little in water and fins shuffle a little on land, so the move ashore has no dead end
+    const swim = 1 - Math.pow(0.62, n[S_FIN] + 0.35 * n[S_LEG]), walk = 1 - Math.pow(0.55, n[S_LEG] + 0.3 * n[S_FIN]);
+    c.swim = swim; c.walk = walk;
+    c.sense = Math.min(1, (1 - Math.pow(0.5, n[S_EYE])) * 0.9 + 0.12 * Math.min(2, n[S_FEEL]));
+    c.armor = Math.min(0.9, 1 - Math.pow(0.62, n[S_SHELL]));
+    c.spines = 1 - Math.pow(0.6, n[S_SPINE]);
+    c.attack = 1 - Math.pow(0.55, n[S_JAW]);
+    const drag = (1 - c.armor * 0.4) / (0.8 + c.mass * 0.15);
+    c.vWater = (0.35 + 2.2 * swim) * drag;
+    c.vLand = (0.2 + 2.1 * walk) * drag;
+    c.turn = (0.2 + 0.1 * Math.max(swim, walk)) / (0.75 + 0.2 * c.mass);
+    c.senseR = 10 + c.sense * 140 + c.r;
+    c.cap = 30 + 45 * c.mass + n[S_FAT] * 30 * g.size;
+    c.mature = 100 + 70 * c.mass;
+    c.links = links(g.B); c.neurons = g.B.h.length;
+    c.mem = new Float32Array(c.neurons);
+    c.upkeep = K * (0.3 + 0.14 * Math.pow(c.mass, 1.3) + 0.06 * n[S_FIN] + 0.07 * n[S_LEG] + 0.12 * n[S_EYE] + 0.05 * n[S_JAW] + 0.09 * n[S_SHELL] + 0.05 * n[S_SPINE] + 0.03 * n[S_FAT] + 0.05 * n[S_FEEL] + 0.03 * n[S_BODY]
+      + 0.08 * g.litter + 0.1 * g.terr + 0.002 * c.links + 0.004 * c.neurons);
+    c.moveK = K * 0.8 * (0.4 + 0.5 * c.mass);
+    c.bite = 2 + c.mass * 1.0 + c.attack * 1.5;
+    c.body = 10 * c.mass;
   }
 
+  /* ---------- heredity ---------- */
+  mutateBrain(B0) {
+    const B = cloneBrain(B0), r = this.rng;
+    const tweak = w => {
+      if (w !== 0) { const x = r(); if (x < 0.12) return clamp(w + this.gauss() * 0.25, -4, 4); if (x < 0.124) return 0; return w; }
+      return r() < 0.003 ? this.gauss() * 0.8 : 0;
+    };
+    for (let i = 0; i < B.wd.length; i++) B.wd[i] = tweak(B.wd[i]);
+    for (const nr of B.h) {
+      for (let i = 0; i < NI; i++) nr.i[i] = tweak(nr.i[i]);
+      for (let k = 0; k < NO; k++) nr.o[k] = tweak(nr.o[k]);
+      if (nr.s !== 0) { if (r() < 0.12) nr.s = clamp(nr.s + this.gauss() * 0.2, -1.5, 1.5); else if (r() < 0.01) nr.s = 0; }
+      else if (r() < 0.01) nr.s = this.gauss() * 0.6;
+    }
+    // neuron duplication: split an existing neuron in two so behavior is preserved, then the copies can diverge
+    if (B.h.length < MAXH && r() < 0.04) {
+      if (B.h.length && r() < 0.7) {
+        const src = B.h[(r() * B.h.length) | 0];
+        const cp = { i: src.i.slice(), o: src.o.map(w => w * 0.5), s: src.s };
+        for (let k = 0; k < NO; k++) src.o[k] *= 0.5;
+        B.h.push(cp);
+      } else {
+        const nr = { i: new Array(NI).fill(0), o: new Array(NO).fill(0), s: 0 };
+        nr.i[(r() * NI) | 0] = this.gauss() * 0.8; nr.o[(r() * NO) | 0] = this.gauss() * 0.8;
+        B.h.push(nr);
+      }
+    }
+    if (B.h.length && r() < 0.008) {
+      const j = (r() * B.h.length) | 0;
+      if (!B.h[j].o.some(w => w !== 0)) B.h.splice(j, 1);
+    }
+    return B;
+  }
+  mutateSegs(s0) {
+    const s = s0.slice(), r = this.rng;
+    if (s.length < MAXSEG && r() < 0.02) { const i = (r() * s.length) | 0; s.splice(i + 1, 0, s[i]); }
+    if (s.length > 1 && r() < 0.012) s.splice((r() * s.length) | 0, 1);
+    if (r() < 0.025) s[(r() * s.length) | 0] = (r() * NSEG) | 0;
+    return s;
+  }
   mutate(g) {
     const n = {};
     for (const k of GK) {
@@ -399,14 +482,19 @@ class Sim {
       if (this.rng() < 0.03) sd *= 5;
       n[k] = clamp(g[k] + this.gauss() * sd, lo, hi);
     }
-    const B = g.B.slice();
-    for (let i = 0; i < NB; i++) {
-      if (B[i] !== 0) {
-        const r = this.rng();
-        if (r < 0.12) B[i] = clamp(B[i] + this.gauss() * 0.25, -4, 4);
-        else if (r < 0.124) B[i] = 0;
-      } else if (this.rng() < 0.003) B[i] = this.gauss() * 0.8;
-    }
+    n.segs = this.mutateSegs(g.segs);
+    n.B = this.mutateBrain(g.B);
+    return n;
+  }
+  cross(a, b) {
+    const r = this.rng, n = {};
+    for (const k of GK) n[k] = r() < 0.5 ? a[k] : b[k];
+    const base = r() < 0.5 ? a : b, other = base === a ? b : a;
+    n.segs = base.segs.slice();
+    for (let i = 0; i < n.segs.length && i < other.segs.length; i++) if (r() < 0.3) n.segs[i] = other.segs[i];
+    const B = cloneBrain(base.B);
+    for (let i = 0; i < B.wd.length; i++) if (r() < 0.5) B.wd[i] = other.B.wd[i];
+    for (let j = 0; j < B.h.length && j < other.B.h.length; j++) if (r() < 0.5) { const o = other.B.h[j]; B.h[j] = { i: o.i.slice(), o: o.o.slice(), s: o.s }; }
     n.B = B;
     return n;
   }
@@ -417,12 +505,15 @@ class Sim {
   }
   makePlant(g, x, y, e) { return { x, y, g, e, age: 0, maxAge: 1800 + this.rng() * 2200, dead: false }; }
 
-  dist(a, aB, b, bB) {
+  dist(a, aSegs, aB, b, bSegs, bB) {
     let s = 0;
     for (const k of GK) { const r = GENES[k][1] - GENES[k][0]; const d = (a[k] - b[k]) / r; s += DWT[k] * d * d; }
-    let m = 0; for (let i = 0; i < NB; i++) m += Math.abs(aB[i] - bB[i]);
-    m /= NB;
-    s += 0.08 * (m / 0.15) * (m / 0.15);
+    const ca = segCounts(aSegs), cb = segCounts(bSegs);
+    let sd = 0; for (let t = 0; t < NSEG; t++) sd += Math.abs(ca[t] - cb[t]);
+    s += 0.012 * sd * sd;
+    let m = 0, cnt = 0;
+    for (let i = 0; i < aB.wd.length; i++) { m += Math.abs(aB.wd[i] - bB.wd[i]); cnt++; }
+    s += 0.08 * Math.pow(m / cnt / 0.15, 2) + 0.004 * Math.pow(aB.h.length - bB.h.length, 2);
     return Math.sqrt(s);
   }
 
@@ -430,7 +521,6 @@ class Sim {
   step() {
     const rng = this.rng;
     this.t++;
-    // climate
     if (this.t >= this.nextClimate && this.climateHold <= 0) {
       const old = this.climateTarget;
       let tgt = (rng() * 2 - 1) * 0.75;
@@ -442,7 +532,6 @@ class Sim {
     }
     if (this.climateHold > 0) this.climateHold--;
     this.climate += (this.climateTarget - this.climate) * (this.climateHold > 0 ? 0.0015 : 0.0005);
-    // vents
     for (const v of this.vents) {
       v.x += v.vx; v.y += v.vy;
       if (v.x < 90 || v.x > W - 90) v.vx *= -1;
@@ -450,7 +539,6 @@ class Sim {
       if (rng() < 0.0008) { const a = rng() * TAU; v.vx = Math.cos(a) * 0.02; v.vy = Math.sin(a) * 0.02; }
       v.ph += 0.0004; v.p = 0.9 + 0.6 * Math.sin(v.ph);
     }
-    // oxygen and sea level
     if (this.oxyDip > 0) this.oxyDip = Math.max(0, this.oxyDip - 0.00002);
     this.oxygen = Math.max(0.03, 1 - Math.exp(-this.cumO / 1.5e6) - this.oxyDip);
     if (!this.seaFalling && this.oxygen > 0.55 && this.t > 20000) {
@@ -462,10 +550,8 @@ class Sim {
       if (this.t % 100 === 0) this.terrainVer++;
     }
     if (this.t % 50 === 0) this.updateFert();
-    // catastrophes
     if (this.t >= this.nextCatastrophe) this.catastrophe();
     if (this.flash && this.t - this.flash.t > 400) this.flash = null;
-    // grids
     this.plants = this.plants.filter(p => !p.dead);
     const tt = this.t;
     this.meat = this.meat.filter(m => !m.dead && tt - m.b < 700);
@@ -473,12 +559,10 @@ class Sim {
     for (const p of this.plants) this.pgrid[this.cellOf(p.x, p.y)].push(p);
     for (const m of this.meat) this.mgrid[this.cellOf(m.x, m.y)].push(m);
     for (const c of this.creatures) this.cgrid[this.cellOf(c.x, c.y)].push(c);
-    // plants
     const seeds = [];
     const plen = this.plants.length;
     for (let i = 0; i < plen; i++) { const p = this.plants[i]; if (!p.dead) this.growPlant(p, seeds, plen); }
     for (const s of seeds) this.plants.push(s);
-    // creatures
     const births = [];
     const cs = this.creatures;
     for (let i = 0; i < cs.length; i++) { const c = cs[i]; if (!c.dead) this.act(c, births); }
@@ -486,9 +570,8 @@ class Sim {
     for (const b of births) this.creatures.push(b);
     if (this.t % 30 === 0) this.census();
     if (this.plants.length < 30) this.reseedPlants();
-    if (this.creatures.length === 0) {
-      this.genesis(30, 'All animal life has vanished. After a long silence, new cells assemble near the vents.');
-    }
+    if (this.creatures.length === 0) this.genesis(30, 'All animal life has vanished. After a long silence, new cells assemble near the vents.');
+    else if (this.creatures.length < 25 && this.t % 400 === 0) this.genesis(8, 'Animal life has dwindled. Simple cells from the vents begin filling the empty seas again.', true);
   }
   cellOf(x, y) { return clamp((y / CELL) | 0, 0, GH - 1) * GW + clamp((x / CELL) | 0, 0, GW - 1); }
 
@@ -526,7 +609,7 @@ class Sim {
 
   catastrophe() {
     const r = this.rng;
-    this.nextCatastrophe = this.t + 40000 + Math.floor(r() * 50000);
+    this.nextCatastrophe = this.t + 45000 + Math.floor(r() * 55000);
     const before = this.creatures.length;
     if (before < 60) { this.nextCatastrophe = this.t + 8000; return; }
     const kind = r() < 0.55 ? 'asteroid' : 'volcanic';
@@ -536,14 +619,14 @@ class Sim {
       this.flash = { x, y, t: this.t, R };
       for (const c of this.creatures) {
         const d = Math.hypot(c.x - x, c.y - y);
-        const pk = d < R ? 0.95 : 0.2 + 0.08 * c.g.size;
+        const pk = d < R ? 0.95 : 0.2 + 0.05 * c.mass;
         if (r() < pk && before - killed > 40) { c.dead = true; killed++; }
       }
       for (const p of this.plants) { const d = Math.hypot(p.x - x, p.y - y); if (d < R || r() < 0.4) p.dead = true; }
       this.climateTarget = -0.6; this.climateHold = 3000; this.nextClimate = this.t + 6000;
     } else {
       for (const c of this.creatures) {
-        const pk = 0.15 + 0.1 * c.g.size + (c.g.tpref > 0.3 ? 0.2 : 0);
+        const pk = 0.15 + 0.06 * c.mass + (c.g.tpref > 0.3 ? 0.2 : 0);
         if (r() < pk && before - killed > 40) { c.dead = true; killed++; }
       }
       for (const p of this.plants) if (r() < 0.3) p.dead = true;
@@ -558,16 +641,20 @@ class Sim {
       : `Mass extinction: massive volcanic eruptions choke the skies. About ${pct}% of animal life dies and oxygen levels fall.`, 'catastrophe');
   }
 
+  isReady(c) { return c.e > c.cap * 0.7 && c.age > c.mature && c.rcool <= 0; }
+
   act(c, births) {
     const g = c.g, rng = this.rng;
-    c.age++; if (c.cool > 0) c.cool--; if (c.ecool > 0) c.ecool--;
+    c.age++; if (c.cool > 0) c.cool--; if (c.ecool > 0) c.ecool--; if (c.rcool > 0) c.rcool--;
     c.ph += 0.15 + c.v * 0.25;
+    const ready = this.isReady(c);
+    if (ready) c.ready++; else c.ready = 0;
     const R = c.senseR, R2 = R * R;
     const x0 = clamp(((c.x - R) / CELL) | 0, 0, GW - 1), x1 = clamp(((c.x + R) / CELL) | 0, 0, GW - 1);
     const y0 = clamp(((c.y - R) / CELL) | 0, 0, GH - 1), y1 = clamp(((c.y + R) / CELL) | 0, 0, GH - 1);
     let bf = null, bfd = R2, bfs = Infinity, bfMeat = false;
     let prey = null, bdp = R2, thr = null, bdt = R2;
-    let kin = null, bdk = R2, sx = 0, sy = 0;
+    let kin = null, bdk = R2, mate = null, bdm = R2, sigk = null, bds = R2, kinN = 0, kinSig = 0, sx = 0, sy = 0;
     const canHunt = g.diet > 0.22 && c.e < c.cap * 0.8 && c.cool <= 0;
     const pEff = 1 - Math.pow(g.diet, 1.5), mEff = 0.2 + 0.8 * Math.pow(g.diet, 0.8);
     for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
@@ -598,47 +685,64 @@ class Sim {
       for (let j = 0; j < cl.length; j++) {
         const o = cl[j]; if (o === c || o.dead) continue;
         const dx = o.x - c.x, dy = o.y - c.y, d2 = dx * dx + dy * dy;
-        if (d2 > R2) continue;
+        // signalling animals are easier to spot
+        const lim = o.sig > 0 ? R2 * 1.7 : R2;
+        if (d2 > lim) continue;
         const rr = c.r + o.r;
         if (d2 < rr * rr && d2 > 0.0001) { const d = Math.sqrt(d2); sx -= dx / d; sy -= dy / d; }
-        if (o.sp === c.sp) { if (d2 < bdk) { bdk = d2; kin = o; } continue; }
-        if (o.g.diet > 0.22 && c.r < o.r * 1.2 && d2 < bdt) { bdt = d2; thr = o; }
+        if (o.sp === c.sp) {
+          if (d2 > R2) continue;
+          kinN++; if (o.sig > 0) { kinSig++; if (d2 < bds) { bds = d2; sigk = o; } }
+          if (d2 < bdk) { bdk = d2; kin = o; }
+          if (ready && d2 < bdm && this.isReady(o)) { bdm = d2; mate = o; }
+          continue;
+        }
+        if (o.g.diet > 0.22 && c.r < o.r * 1.2 && d2 < bdt && d2 <= R2) { bdt = d2; thr = o; }
         if (canHunt && o.r < c.r * 1.2 && d2 < bdp) { bdp = d2; prey = o; }
       }
     }
-    // sensors
+    // senses
     const I = this._in || (this._in = new Float32Array(NI));
     const rel = (tx, ty) => wrapA(Math.atan2(ty - c.y, tx - c.x) - c.a) / Math.PI;
+    const px = (d2) => 1 - Math.min(1, Math.sqrt(d2) / R);
     I[0] = 1;
-    if (bf) { const p = 1 - Math.sqrt(bfd) / R; I[1] = rel(bf.x, bf.y) * (0.3 + 0.7 * p); I[2] = p; } else { I[1] = 0; I[2] = 0; }
-    if (prey) { const p = 1 - Math.sqrt(bdp) / R; I[3] = rel(prey.x, prey.y) * (0.3 + 0.7 * p); I[4] = p; } else { I[3] = 0; I[4] = 0; }
-    if (thr) { const p = 1 - Math.sqrt(bdt) / R; I[5] = rel(thr.x, thr.y) * (0.3 + 0.7 * p); I[6] = p; } else { I[5] = 0; I[6] = 0; }
-    if (kin) { const p = 1 - Math.sqrt(bdk) / R; I[7] = rel(kin.x, kin.y); I[8] = p; } else { I[7] = 0; I[8] = 0; }
-    I[9] = c.e / c.cap * 2 - 1;
+    if (bf) { const p = px(bfd); I[1] = rel(bf.x, bf.y) * (0.3 + 0.7 * p); I[2] = p; } else { I[1] = 0; I[2] = 0; }
+    if (prey) { const p = px(bdp); I[3] = rel(prey.x, prey.y) * (0.3 + 0.7 * p); I[4] = p; } else { I[3] = 0; I[4] = 0; }
+    if (thr) { const p = px(bdt); I[5] = rel(thr.x, thr.y) * (0.3 + 0.7 * p); I[6] = p; } else { I[5] = 0; I[6] = 0; }
+    if (kin) { I[7] = rel(kin.x, kin.y); I[8] = px(bdk); } else { I[7] = 0; I[8] = 0; }
+    if (mate) { I[9] = rel(mate.x, mate.y); I[10] = px(bdm); } else { I[9] = 0; I[10] = 0; }
+    I[11] = c.e / c.cap * 2 - 1;
     const T = this.tempAt(c.y), td = g.tpref - T;
-    I[10] = wrapA((td > 0 ? Math.PI / 2 : -Math.PI / 2) - c.a) / Math.PI * Math.min(1, Math.abs(td) * 1.5);
+    I[12] = wrapA((td > 0 ? Math.PI / 2 : -Math.PI / 2) - c.a) / Math.PI * Math.min(1, Math.abs(td) * 1.5);
     const hereLand = this.isLand(c.x, c.y);
     const ax = c.x + Math.cos(c.a) * (c.r + 16), ay = c.y + Math.sin(c.a) * (c.r + 16);
-    if (ax < 4 || ax > W - 4 || ay < 4 || ay > H - 4) I[11] = 0;
-    else I[11] = Math.max(0, this.isLand(ax, ay) ? (1 - 2.5 * g.terr) : (2.5 * g.terr - 1.5));
-    I[12] = Math.sin(c.age * 0.08 + c.id);
-    I[13] = this.gauss() * 0.5;
+    if (ax < 4 || ax > W - 4 || ay < 4 || ay > H - 4) I[13] = 0;
+    else I[13] = Math.max(0, this.isLand(ax, ay) ? (1 - 2.5 * g.terr) : (2.5 * g.terr - 1.5));
+    I[14] = Math.sin(c.age * 0.08 + c.id);
+    I[15] = this.gauss() * 0.5;
+    if (sigk) { I[16] = rel(sigk.x, sigk.y); } else I[16] = 0;
+    I[17] = kinN ? kinSig / kinN : 0;
     // brain
     const B = g.B;
-    let o0 = 0, o1 = 0;
-    for (let j = 0; j < NH; j++) {
-      const w20 = B[O2 + j * NO], w21 = B[O2 + j * NO + 1];
-      if (w20 === 0 && w21 === 0) continue;
-      let s = 0; for (let i = 0; i < NI; i++) { const w = B[O1 + i * NH + j]; if (w !== 0) s += I[i] * w; }
-      if (s === 0) continue;
-      const h = Math.tanh(s); o0 += h * w20; o1 += h * w21;
+    let o0 = 0, o1 = 0, o2 = 0;
+    for (let j = 0; j < B.h.length; j++) {
+      const nr = B.h[j];
+      let s = nr.s * c.mem[j];
+      const wi = nr.i;
+      for (let i = 0; i < NI; i++) { const w = wi[i]; if (w !== 0) s += I[i] * w; }
+      const h = Math.tanh(s); c.mem[j] = h;
+      o0 += h * nr.o[0]; o1 += h * nr.o[1]; o2 += h * nr.o[2];
     }
-    for (let i = 0; i < NI; i++) { const w0 = B[O3 + i * NO], w1 = B[O3 + i * NO + 1]; if (w0 !== 0) o0 += I[i] * w0; if (w1 !== 0) o1 += I[i] * w1; }
+    const wd = B.wd;
+    for (let i = 0; i < NI; i++) { const v = I[i]; if (v === 0) continue; const b = i * NO; o0 += v * wd[b]; o1 += v * wd[b + 1]; o2 += v * wd[b + 2]; }
     const turnOut = Math.tanh(o0), thrust = 1 / (1 + Math.exp(-o1 * 2));
+    c.sig = o2 > 0 ? 1 : 0;
+    // tally signalling for the alarm-call milestone
+    if (this.t % 5 === 0) { const sp = c.sp; if (thr) { sp.alarmT++; sp.alarmS += c.sig; } else { sp.calmT++; sp.calmS += c.sig; } }
     c.turnOut = turnOut; c.thrust = thrust;
     c.a = wrapA(c.a + turnOut * c.turn);
-    const landF = hereLand ? 0.3 + 0.7 * g.terr : 1 - 0.3 * g.terr * g.terr;
-    let want = c.maxV * (0.12 + 0.88 * thrust) * landF;
+    const vmax = hereLand ? c.vLand * (0.3 + 0.7 * g.terr) : c.vWater * (1 - 0.3 * g.terr * g.terr);
+    let want = vmax * (0.12 + 0.88 * thrust);
     if (prey && bdp < (c.r * 4) * (c.r * 4)) want *= 1.3;
     c.v += (want - c.v) * 0.2;
     c.x += Math.cos(c.a) * c.v + sx * 0.4; c.y += Math.sin(c.a) * c.v + sy * 0.4;
@@ -649,84 +753,101 @@ class Sim {
       const ex = bf.x - c.x, ey = bf.y - c.y, rr = c.r + 3;
       if (ex * ex + ey * ey < rr * rr) {
         if (bfMeat) { bf.dead = true; c.e += bf.e * mEff; }
-        else {
-          const take = Math.max(0, Math.min(bf.e - 1, c.bite));
-          bf.e -= take;
-          c.e += take * pEff * (1 - bf.g.tough * 0.5);
-        }
+        else { const take = Math.max(0, Math.min(bf.e - 1, c.bite)); bf.e -= take; c.e += take * pEff * (1 - bf.g.tough * 0.5); }
         c.ate = 6; c.ecool = 4;
       }
     }
+    // hunting
     if (prey && !prey.dead && c.cool <= 0) {
       const ex = prey.x - c.x, ey = prey.y - c.y, rr = c.r + prey.r + 1;
       if (ex * ex + ey * ey < rr * rr) {
         c.cool = 6; c.e -= 0.3;
         const ratio = c.r / prey.r;
-        const p = clamp(1.6 * Math.pow(Math.max(0, g.diet - 0.15), 1.3) * Math.pow(Math.min(ratio, 1.8), 1.5) * (ratio > 1.5 ? Math.pow(1.5 / ratio, 4) : 1) * (1 - prey.g.armor * 0.8), 0, 0.85);
-        if (rng() < p) {
+        const p = clamp(1.6 * Math.pow(Math.max(0, g.diet - 0.15), 1.3) * (0.45 + c.attack) * Math.pow(Math.min(ratio, 1.8), 1.5) * (ratio > 1.5 ? Math.pow(1.5 / ratio, 4) : 1) * (1 - prey.armor * 0.8) * (1 - prey.spines * 0.5), 0, 0.85);
+        // small animals hiding in thick plant cover are hard to catch
+        const cover = prey.r < 5 && this.pgrid[this.cellOf(prey.x, prey.y)].length >= 12 ? 0.35 : 1;
+        if (!prey.hit || this.t - prey.hit.t > 30) prey.hit = { t: this.t, sp: c.sp, ids: [c.id] };
+        else if (prey.hit.sp === c.sp && prey.hit.ids.indexOf(c.id) < 0) { prey.hit.ids.push(c.id); prey.hit.t = this.t; }
+        if (rng() < p * cover) {
           prey.dead = true;
           c.e += (Math.max(0, prey.e) * 0.9 + prey.body) * mEff;
           c.ate = 10; c.kills++; c.cool = 45;
-        }
+          if (prey.hit && prey.hit.sp === c.sp && prey.hit.ids.length >= 2) c.sp.packs++;
+        } else if (prey.spines > 0) c.e -= prey.spines * 3;
       }
     }
     if (c.ate > 0) c.ate--;
     // metabolism
-    const cap = 0.8 + 4.2 * Math.pow(this.oxygen, 1.5), over = Math.max(0, g.size - cap);
-    let drain = c.upkeep + c.moveK * c.v * c.v + K * 1.1 * td * td * (0.6 + 0.2 * g.size) + K * 6 * over * over;
+    const cap = 0.8 + 5.2 * Math.pow(this.oxygen, 1.5), over = Math.max(0, c.mass - cap);
+    let drain = c.upkeep + c.moveK * c.v * c.v + K * 1.1 * td * td * (0.6 + 0.15 * c.mass) + K * 6 * over * over;
     drain += hereLand ? K * 1.2 * (1 - g.terr) * (1 - g.terr) : K * 1.0 * g.terr * g.terr;
+    if (c.sig) drain += K * 0.03;
     c.e -= drain;
     if (c.e <= 0 || c.age > c.maxAge) {
       c.dead = true;
-      const n = Math.min(3, Math.max(1, Math.round(g.size)));
+      const n = Math.min(3, Math.max(1, Math.round(c.mass)));
       const each = (Math.max(0, c.e) * 0.5 + c.body * 0.8) / n;
       if (each > 1) for (let i = 0; i < n && this.meat.length < MAXMEAT; i++) this.meat.push({ x: clamp(c.x + this.gauss() * c.r, 4, W - 4), y: clamp(c.y + this.gauss() * c.r, 4, H - 4), dead: false, e: each, b: this.t });
       return;
     }
-    // reproduce
-    if (c.e > c.cap * 0.75 && c.age > c.mature && this.creatures.length + births.length < MAXC) {
-      const n = 1 + Math.floor(g.litter * 2.999);
-      const give = c.e * 0.5; c.e -= give;
-      const each = give * 0.9 / n;
-      for (let i = 0; i < n; i++) {
-        const cg = this.mutate(g);
-        let sp = c.sp;
-        if (this.dist(cg, cg.B, sp.founder, sp.fB) > SPECIATE) sp = this.makeSpecies(sp, cg, cg.B);
-        const ce = each - 10 * cg.size;
-        if (ce < 8) continue;
-        births.push(this.makeCreature(cg, clamp(c.x + this.gauss() * 4, 3, W - 3), clamp(c.y + this.gauss() * 4, 3, H - 3), sp, ce, c.gen + 1));
-      }
-    }
     if (c.e > c.cap) c.e = c.cap;
+    // reproduction: mate when a ready partner is touching, or go it alone after waiting too long
+    if (!ready || this.creatures.length + births.length >= MAXC) return;
+    let partner = null;
+    if (mate && !mate.dead) { const ex = mate.x - c.x, ey = mate.y - c.y, rr = c.r + mate.r + 4; if (ex * ex + ey * ey < rr * rr) partner = mate; }
+    if (!partner && c.ready < 350) return;
+    const n = 1 + Math.floor(g.litter * 2.999);
+    let give = c.e * (partner ? 0.35 : 0.5); c.e -= give;
+    if (partner) { const pg = partner.e * 0.3; partner.e -= pg; give += pg; partner.rcool = 60; partner.ready = 0; }
+    c.rcool = 60; c.ready = 0;
+    const each = give * 0.9 / n;
+    for (let i = 0; i < n; i++) {
+      const cg = this.mutate(partner ? this.cross(g, partner.g) : g);
+      const mass = cg.size * (0.7 + 0.3 * cg.segs.length);
+      const ce = each - 10 * mass;
+      if (ce < 8) continue;
+      let sp = c.sp;
+      if (this.dist(cg, cg.segs, cg.B, sp.founder, sp.fSegs, sp.fB) > SPECIATE) sp = this.makeSpecies(sp, cg);
+      births.push(this.makeCreature(cg, clamp(c.x + this.gauss() * 4, 3, W - 3), clamp(c.y + this.gauss() * 4, 3, H - 3), sp, ce, c.gen + 1));
+    }
   }
 
   census() {
-    for (const sp of this.active) { sp._n = 0; sp._l = 0; for (const k of GK) sp._s[k] = 0; }
-    const tot = { size: 0, speed: 0, sense: 0, diet: 0, armor: 0, terr: 0, links: 0, hidden: 0 };
+    const groups = new Map();
     let onLand = 0;
+    const tot = { mass: 0, diet: 0, armor: 0, links: 0, neurons: 0, segs: 0, cx: 0 };
     for (const c of this.creatures) {
-      const sp = c.sp; sp._n++; sp._l += c.links;
-      for (const k of GK) sp._s[k] += c.g[k];
-      tot.size += c.g.size; tot.speed += c.g.speed; tot.sense += c.g.sense; tot.diet += c.g.diet; tot.armor += c.g.armor; tot.terr += c.g.terr; tot.links += c.links;
+      let arr = groups.get(c.sp); if (!arr) { arr = []; groups.set(c.sp, arr); } arr.push(c);
+      tot.mass += c.mass; tot.diet += c.g.diet; tot.armor += c.armor; tot.links += c.links; tot.neurons += activeNeurons(c.g.B); tot.segs += c.nSeg;
       if (this.isLand(c.x, c.y)) onLand++;
-      if (!sp.rep || this.rng() < 0.05) sp.rep = c.g;
     }
     for (const sp of Array.from(this.active)) {
-      sp.pop = sp._n;
+      const arr = groups.get(sp);
+      sp.pop = arr ? arr.length : 0;
       if (sp.pop === 0) {
         sp.extinct = this.t; this.active.delete(sp);
         if (sp.recognized && sp.peak >= 30) this.log(sp.name + ' goes extinct after ' + fmtSpan((this.t - sp.born) * YPT) + ' (peak population ' + sp.peak + ').', 'extinct', sp);
         continue;
       }
-      for (const k of GK) sp.mean[k] = sp._s[k] / sp._n;
-      sp.mean.links = sp._l / sp._n;
+      if (this.t % 90 === 0 || !sp.recognized) {
+        const sample = arr.length > 25 ? arr.filter((_, i) => i % Math.ceil(arr.length / 25) === 0) : arr;
+        sp.mean = this.meanOf(sample.map(c => c.g));
+        sp.mean.mass = sample.reduce((a, c) => a + c.mass, 0) / sample.length;
+        let best = sample[0]; for (const c of sample) if (c.age > best.age) best = c;
+        sp.rep = best.g;
+        // herding: how clumped the species is compared with a random spread
+        let near = 0; for (const c of sample) { for (const o of this.cgrid[this.cellOf(c.x, c.y)]) if (o.sp === sp && o !== c && Math.abs(o.x - c.x) < 30 && Math.abs(o.y - c.y) < 30) near++; }
+        sp.clump = near / sample.length;
+        sp.onLand = sample.filter(c => this.isLand(c.x, c.y)).length / sample.length;
+        sp.kinPull = sample.reduce((a, c) => a + c.g.B.wd[7 * NO], 0) / sample.length;
+      }
       if (sp.pop > sp.peak) sp.peak = sp.pop;
       if (!sp.recognized && sp.pop >= 10) this.recognize(sp);
     }
-    // density-dependent disease keeps any one species from owning the world
+    // density-dependent disease
     const total = this.creatures.length;
     for (const sp of this.active) {
-      if (sp.recognized && sp.pop > 60 && sp.pop > total * 0.6 && this.t - (sp.plague || -1e9) > 15000 && this.rng() < 0.002) {
+      if (sp.recognized && sp.pop > 25 && sp.pop > total * 0.7 && this.t - (sp.plague || -1e9) > 15000 && this.rng() < 0.002) {
         sp.plague = this.t;
         let killed = 0;
         for (const c of this.creatures) if (c.sp === sp && this.rng() < 0.45) { c.dead = true; killed++; }
@@ -735,41 +856,53 @@ class Sim {
         this.log('A plague sweeps through ' + sp.name + ', the most crowded species, killing ' + killed + '.', 'plague', sp);
       }
     }
-    // plants summary
     let pt = 0, pl = 0, landPlants = 0;
     for (const p of this.plants) { pt += p.g.tough; pl += p.g.landTol; if (this.height[this.tcell(p.x, p.y)] > this.seaLevel) landPlants++; }
     const np = this.plants.length || 1;
     this.plantStats = { n: this.plants.length, tough: pt / np, landTol: pl / np, onLand: landPlants };
     // milestones
     const feats = {};
-    const hit = (k, text, sp) => { feats[k] = true; if (!this.milestones[k]) { this.milestones[k] = { t: this.t, sp: sp || null }; this.log(text, 'milestone', sp); } };
+    const ERA = { eyes: 'Dawn of Sight', swim: 'Age of Swimmers', oxy: 'Great Oxygenation', multi: 'Multicellular Bloom', segments: 'Age of Segments', pred: 'Age of Predators', arms: 'Arms Race', giant: 'Age of Giants', landplants: 'Greening of the Land', landanimals: 'Conquest of Land', brain: 'Age of Brains', herds: 'Social Age', packs: 'Age of Pack Hunters', mind: 'Age of Minds' };
+    const hit = (k, text, sp) => {
+      feats[k] = true;
+      if (this.milestones[k]) return;
+      this.milestones[k] = { t: this.t, sp: sp || null }; this.log(text, 'milestone', sp);
+      if (ERA[k] && this.era !== ERA[k]) { this.era = ERA[k]; this.log('A new era begins: ' + this.era + '.', 'era'); }
+    };
+    let top = null;
+    for (const sp of this.active) if (sp.recognized && sp.pop >= 3 && (!top || sp.mean.cx > top.mean.cx)) top = sp;
     for (const sp of this.active) {
-      if (!sp.recognized) continue;
-      const m = sp.mean;
-      if (m.sense > 0.35) hit('eyes', 'First eyespots: ' + sp.name + ' can now sense food and danger at a distance.', sp);
-      if (m.sense > 0.7) hit('sight', 'Complex eyes evolve in ' + sp.name + '.', sp);
-      if (m.speed > 1.3) hit('swim', sp.name + ' grows flagella and becomes a fast swimmer.', sp);
-      if (m.size > 1.6) hit('multi', 'First multicellular body plan appears in ' + sp.name + '.', sp);
-      if (m.size > 3.2) hit('giant', 'Giants appear: ' + sp.name + ' dwarfs its ancestors.', sp);
-      if (m.diet > 0.55) hit('pred', 'First true predator: ' + sp.name + ' hunts other animals.', sp);
-      if (m.armor > 0.45) hit('armor', 'Defensive spines evolve in ' + sp.name + '.', sp);
-      if (m.links > SEED_LINKS + 9) hit('brain', 'A more elaborate nervous system evolves in ' + sp.name + ' (' + Math.round(m.links) + ' neural links).', sp);
-      if (m.tpref < -0.75) hit('cold', sp.name + ' colonizes the frigid northern waters.', sp);
-      if (m.tpref > 0.75) hit('warm', sp.name + ' colonizes the hot southern waters.', sp);
-      if (m.terr > 0.55 && sp.pop >= 12) hit('landanimals', 'Conquest of land: ' + sp.name + ' walks out of the sea.', sp);
+      if (!sp.recognized || sp.pop < 8) continue;
+      const m = sp.mean, n = m.count;
+      if (n[S_EYE] >= 0.8) hit('eyes', 'First eyes: ' + sp.name + ' can see food and danger at a distance.', sp);
+      if (n[S_EYE] >= 1.8) hit('sight', 'Paired eyes evolve in ' + sp.name + ', giving it a sharper view of the world.', sp);
+      if (n[S_FIN] >= 1.8) hit('swim', sp.name + ' grows extra fins and becomes a fast swimmer.', sp);
+      if (m.mass > 1.6) hit('multi', 'First large multicellular bodies appear in ' + sp.name + '.', sp);
+      if (m.segs >= 5) hit('segments', 'Segmented bodies: ' + sp.name + ' is built from ' + Math.round(m.segs) + ' repeated body sections.', sp);
+      if (m.mass > 4) hit('giant', 'Giants appear: ' + sp.name + ' dwarfs its ancestors.', sp);
+      if (m.diet > 0.5 && n[S_JAW] >= 0.5) hit('pred', 'First true predator: ' + sp.name + ' hunts with jaws.', sp);
+      if (n[S_SHELL] >= 0.8) hit('shell', 'Shells evolve in ' + sp.name + '.', sp);
+      if (n[S_SPINE] >= 0.8) hit('spines', 'Defensive spines evolve in ' + sp.name + '.', sp);
+      if (n[S_FAT] >= 0.8) hit('fat', sp.name + ' evolves fat stores to survive lean times.', sp);
+      if (m.neurons >= 3) hit('brain', 'A true brain: ' + sp.name + ' uses ' + m.neurons.toFixed(1) + ' inner neurons on average.', sp);
+      if (m.memory >= 1.5) hit('memory', 'Memory evolves: ' + sp.name + ' acts on what happened moments ago, not just what it sees now.', sp);
+      if (m.neurons >= 8) hit('mind', 'Complex minds: ' + sp.name + ' carries ' + m.neurons.toFixed(1) + ' inner neurons.', sp);
+      if (m.terr > 0.45 && n[S_LEG] >= 1 && sp.onLand > 0.5 && sp.pop >= 12) hit('landanimals', 'Conquest of land: ' + sp.name + ' walks out of the sea on ' + Math.round(n[S_LEG] * 2) + ' legs.', sp);
+      if (sp.clump > 3 && sp.pop >= 15 && sp.kinPull > 1.0) hit('herds', 'Herds: ' + sp.name + ' moves in tight groups.', sp);
+      if (sp.packs >= 15 && m.diet > 0.5) hit('packs', 'Pack hunting: ' + sp.name + ' brings down prey together.', sp);
+      if (sp.alarmT > 150 && sp.alarmS / sp.alarmT > 0.5 && sp.calmT > 150 && sp.calmS / sp.calmT < 0.2) hit('alarm', 'Alarm calls: ' + sp.name + ' flashes a warning to its kin when danger appears.', sp);
     }
     if (this.oxygen > 0.35) hit('oxy', 'The Great Oxygenation: algae have filled the water with oxygen. Larger bodies are now possible.');
     if (this.plantStats.onLand >= 40) hit('landplants', 'The first plants take root on dry land.');
-    if (feats.pred && feats.armor) hit('arms', 'An arms race: prey are armoring up as fast as predators can adapt.');
-    const ERA = [['eyes', 'Dawn of Sight'], ['swim', 'Age of Swimmers'], ['oxy', 'Great Oxygenation'], ['multi', 'Multicellular Bloom'], ['giant', 'Age of Giants'], ['pred', 'Age of Predators'], ['arms', 'Arms Race'], ['landplants', 'Greening of the Land'], ['landanimals', 'Conquest of Land']];
-    for (let i = ERA.length - 1; i >= 0; i--) {
-      if (!this.milestones[ERA[i][0]]) continue;
-      if (i > this.eraRank) { this.eraRank = i; this.era = ERA[i][1]; this.log('A new era begins: ' + this.era + '.', 'era'); }
-      break;
+    if ((feats.pred || this.milestones.pred) && (feats.shell || feats.spines)) hit('arms', 'An arms race: prey armor up as fast as predators adapt.');
+    if (top && top.mean.cx > this.record.complexity + 0.5) {
+      const was = this.record.complexity;
+      this.record = { complexity: top.mean.cx, name: top.name };
+      if (was > 0 && Math.floor(top.mean.cx / 5) > Math.floor(was / 5)) this.log('New complexity record: ' + top.name + ' reaches ' + top.mean.cx.toFixed(0) + ' on the complexity scale.', 'record', top);
     }
     const n = this.creatures.length || 1;
     let spc = 0; for (const sp of this.active) if (sp.recognized) spc++;
-    this.history.push({ t: this.t, pop: this.creatures.length, spc, size: tot.size / n, speed: tot.speed / n, sense: tot.sense / n, diet: tot.diet / n, armor: tot.armor / n, temp: this.climate, plants: this.plants.length, oxy: this.oxygen, links: tot.links / n, land: onLand / n, tough: this.plantStats.tough });
+    this.history.push({ t: this.t, pop: this.creatures.length, spc, size: tot.mass / n, diet: tot.diet / n, armor: tot.armor / n, temp: this.climate, plants: this.plants.length, oxy: this.oxygen, links: tot.links / n, neurons: tot.neurons / n, segs: tot.segs / n, land: onLand / n, cx: top ? top.mean.cx : 0 });
     if (this.history.length > 600) this.history = this.history.filter((_, i) => i % 2 === 0);
   }
 
@@ -777,18 +910,21 @@ class Sim {
     sp.recognized = true;
     let a = sp.parent; while (a && !a.recognized) a = a.parent;
     sp.anc = a;
-    const m = sp.mean, p = a ? a.mean : Object.assign({ links: SEED_LINKS }, PROTO);
+    const m = sp.mean, p = a ? a.mean : this.meanOf([Object.assign({ segs: PROTO_SEGS, B: seedBrain() }, PROTO)]);
+    const d = t => m.count[t] - p.count[t];
     const score = {
-      eyes: m.sense - p.sense, fast: (m.speed - p.speed) / 2.85, big: (m.size - p.size) / 4.6, small: (p.size - m.size) / 4.6,
-      pred: m.diet - p.diet, armor: m.armor - p.armor, warm: (m.tpref - p.tpref) / 2.4, cold: (p.tpref - m.tpref) / 2.4,
-      brood: m.litter - p.litter, graze: p.diet - m.diet, land: (m.terr - p.terr) * 1.3, sea: (p.terr - m.terr) * 1.2, brain: (m.links - p.links) / 20
+      eyes: d(S_EYE) / 2, fast: (d(S_FIN) + d(S_LEG)) / 3, big: (m.mass - (p.mass || m.mass)) / 4, small: ((p.mass || m.mass) - m.mass) / 4,
+      pred: (m.diet - p.diet) + d(S_JAW) / 4, armor: d(S_SHELL) / 2, spine: d(S_SPINE) / 2, warm: (m.tpref - p.tpref) / 2.4, cold: (p.tpref - m.tpref) / 2.4,
+      brood: m.litter - p.litter, graze: p.diet - m.diet, land: (m.terr - p.terr) * 1.3, sea: (p.terr - m.terr) * 1.2, brain: (m.neurons - p.neurons) / 4,
+      seg: (m.segs - p.segs) / 4, fat: d(S_FAT) / 2, feel: d(S_FEEL) / 2
     };
-    const ok = { eyes: m.sense > 0.3, fast: m.speed > 1.0, big: m.size > 1.2, small: p.size > 1.0, pred: m.diet > 0.35, armor: m.armor > 0.3, warm: m.tpref > 0.3, cold: m.tpref < -0.3, brood: m.litter > 0.5, graze: p.diet > 0.3, land: m.terr > 0.35, sea: p.terr > 0.35, brain: m.links > SEED_LINKS + 5 };
+    const n = m.count;
+    const ok = { eyes: n[S_EYE] >= 1, fast: n[S_FIN] + n[S_LEG] >= 2, big: m.mass > 1.5, small: true, pred: m.diet > 0.35, armor: n[S_SHELL] >= 1, spine: n[S_SPINE] >= 1, warm: m.tpref > 0.3, cold: m.tpref < -0.3, brood: m.litter > 0.5, graze: p.diet > 0.3, land: m.terr > 0.35, sea: p.terr > 0.35, brain: m.neurons >= 2, seg: m.segs >= 4, fat: n[S_FAT] >= 1, feel: n[S_FEEL] >= 1 };
     let best = 'plain', bs = 0.04;
     for (const k in score) if (ok[k] && score[k] > bs) { bs = score[k]; best = k; }
     if (!a) best = 'plain';
     let genus = a ? a.genus : null;
-    if (!a || Math.abs(m.diet - p.diet) > 0.25 || Math.abs(m.size - p.size) > 0.9 || Math.abs(m.terr - p.terr) > 0.3 || this.rng() < 0.18) genus = null;
+    if (!a || Math.abs(m.diet - p.diet) > 0.25 || Math.abs((m.mass || 0) - (p.mass || 0)) > 1 || Math.abs(m.terr - p.terr) > 0.3 || Math.abs(m.segs - p.segs) > 1.5 || this.rng() < 0.18) genus = null;
     const newGenus = () => {
       for (let i = 0; i < 40; i++) {
         const gname = GENUS_A[(this.rng() * GENUS_A.length) | 0] + GENUS_B[(this.rng() * GENUS_B.length) | 0];
@@ -816,36 +952,38 @@ class Sim {
     const keep = new Set(this.recognized); for (const sp of this.active) keep.add(sp);
     const near = sp => { let a = sp.parent; while (a && !keep.has(a)) a = a.parent; return a; };
     const r2 = v => Math.round(v * 100) / 100, r3 = v => Math.round(v * 1000) / 1000;
-    const gs = g => { const o = {}; for (const k of GK) o[k] = r3(g[k]); o.B = g.B.map(r3); return o; };
+    const bs = b => ({ wd: b.wd.map(r3), h: b.h.map(n => ({ i: n.i.map(r3), o: n.o.map(r3), s: r3(n.s) })) });
+    const gs = g => { const o = {}; for (const k of GK) o[k] = r3(g[k]); o.segs = g.segs.slice(); o.B = bs(g.B); return o; };
     const ms = {};
     for (const k in this.milestones) { const m = this.milestones[k]; ms[k] = { t: m.t, sp: m.sp && keep.has(m.sp) ? m.sp.id : null }; }
     return {
-      v: 2, savedAt: Date.now(), seed: this.seed, s: this._s, t: this.t, nid: this.nid, spid: this.spid,
-      sps: [...keep].map(sp => { const p = near(sp); return { id: sp.id, p: p ? p.id : null, a: sp.anc ? sp.anc.id : null, f: sp.founder, fB: sp.fB.map(r3), b: sp.born, x: sp.extinct, pop: sp.pop, pk: sp.peak, r: sp.recognized, h: sp.hue, n: sp.name, g: sp.genus, m: sp.mean, tr: sp.trait || null }; }),
+      v: 3, savedAt: Date.now(), seed: this.seed, s: this._s, t: this.t, nid: this.nid, spid: this.spid,
+      sps: [...keep].map(sp => { const p = near(sp); return { id: sp.id, p: p ? p.id : null, a: sp.anc ? sp.anc.id : null, f: sp.founder, fs: sp.fSegs, fB: bs(sp.fB), b: sp.born, x: sp.extinct, pop: sp.pop, pk: sp.peak, r: sp.recognized, h: sp.hue, n: sp.name, g: sp.genus, m: sp.mean, tr: sp.trait || null, pk2: sp.packs, pl: sp.plague || null, rep: sp.extinct === null ? null : gs(sp.rep) }; }),
       act: [...this.active].map(sp => sp.id), rec: this.recognized.map(sp => sp.id),
-      cr: this.creatures.map(c => ({ id: c.id, x: r2(c.x), y: r2(c.y), a: r2(c.a), g: gs(c.g), s: c.sp.id, e: r2(c.e), age: c.age, gen: c.gen, cool: c.cool, v: r2(c.v), ph: r2(c.ph), k: c.kills, ma: r2(c.maxAge) })),
+      cr: this.creatures.map(c => ({ id: c.id, x: r2(c.x), y: r2(c.y), a: r2(c.a), g: gs(c.g), s: c.sp.id, e: r2(c.e), age: c.age, gen: c.gen, cool: c.cool, v: r2(c.v), ph: r2(c.ph), k: c.kills, ma: r2(c.maxAge), rc: c.rcool })),
       pl: this.plants.filter(p => !p.dead).map(p => [r2(p.x), r2(p.y), r2(p.e), p.age, Math.round(p.maxAge), r3(p.g.grow), r3(p.g.tough), r3(p.g.spread), r3(p.g.tpref), r3(p.g.landTol)]),
       meat: this.meat.filter(m => !m.dead).map(m => [r2(m.x), r2(m.y), r2(m.e), m.b]),
       vents: this.vents, climate: this.climate, ct: this.climateTarget, nc: this.nextClimate, ch: this.climateHold,
       mg: this.maxGen, era: this.era, er: this.eraRank, ms, events: this.events, history: this.history,
-      names: [...this.names], genera: [...this.genera],
+      names: [...this.names], genera: [...this.genera], rec2: this.record,
       cumO: this.cumO, oxyDip: this.oxyDip, sea: this.seaLevel, sf: this.seaFalling, ncat: this.nextCatastrophe, cats: this.catastrophes || 0
     };
   }
   restore(o) {
     this._s = o.s; this.t = o.t; this.nid = o.nid; this.spid = o.spid;
     const byId = new Map();
-    for (const d of o.sps) byId.set(d.id, { id: d.id, parent: null, founder: d.f, fB: d.fB, born: d.b, extinct: d.x, pop: d.pop, peak: d.pk, recognized: d.r, hue: d.h, name: d.n, genus: d.g, mean: d.m, anc: null, trait: d.tr, rep: null, _n: 0, _s: {} });
+    for (const d of o.sps) byId.set(d.id, { id: d.id, parent: null, founder: d.f, fSegs: d.fs, fB: d.fB, born: d.b, extinct: d.x, pop: d.pop, peak: d.pk, recognized: d.r, hue: d.h, name: d.n, genus: d.g, mean: d.m, anc: null, trait: d.tr, rep: d.rep, packs: d.pk2 || 0, plague: d.pl, alarmT: 0, alarmS: 0, calmT: 0, calmS: 0 });
     for (const d of o.sps) { const sp = byId.get(d.id); sp.parent = byId.get(d.p) || null; sp.anc = byId.get(d.a) || null; }
     for (const id of o.act) { const sp = byId.get(id); if (sp) this.active.add(sp); }
     for (const id of o.rec) { const sp = byId.get(id); if (sp) this.recognized.push(sp); }
     for (const d of o.cr) {
       const sp = byId.get(d.s); if (!sp) continue;
-      const c = { id: d.id, x: d.x, y: d.y, a: d.a, g: d.g, sp, e: d.e, age: d.age, gen: d.gen, dead: false, cool: d.cool, ecool: 0, v: d.v, ph: d.ph, ate: 0, kills: d.k || 0, turnOut: 0 };
+      const c = { id: d.id, x: d.x, y: d.y, a: d.a, g: d.g, sp, e: d.e, age: d.age, gen: d.gen, dead: false, cool: d.cool, ecool: 0, rcool: d.rc || 0, ready: 0, v: d.v, ph: d.ph, ate: 0, kills: d.k || 0, turnOut: 0, sig: 0, hit: null };
       this.derive(c); c.e = d.e; c.maxAge = d.ma;
       if (!sp.rep) sp.rep = c.g;
       this.creatures.push(c);
     }
+    for (const sp of byId.values()) if (!sp.rep) sp.rep = Object.assign({ segs: sp.fSegs, B: sp.fB }, sp.founder);
     this.plants = o.pl.map(a => ({ x: a[0], y: a[1], e: a[2], age: a[3], maxAge: a[4], g: { grow: a[5], tough: a[6], spread: a[7], tpref: a[8], landTol: a[9] }, dead: false }));
     this.meat = o.meat.map(a => ({ x: a[0], y: a[1], e: a[2], b: a[3], dead: false }));
     this.vents = o.vents; this.climate = o.climate; this.climateTarget = o.ct; this.nextClimate = o.nc; this.climateHold = o.ch || 0;
@@ -853,6 +991,7 @@ class Sim {
     for (const k in o.ms) this.milestones[k] = { t: o.ms[k].t, sp: byId.get(o.ms[k].sp) || null };
     this.events = o.events || []; this.history = o.history || [];
     this.names = new Set(o.names || []); this.genera = new Set(o.genera || []);
+    this.record = o.rec2 || { complexity: 0, name: null };
     this.cumO = o.cumO; this.oxyDip = o.oxyDip || 0; this.oxygen = Math.max(0.03, 1 - Math.exp(-this.cumO / 1.5e6) - this.oxyDip);
     this.seaLevel = o.sea; this.seaFalling = o.sf; this.nextCatastrophe = o.ncat; this.catastrophes = o.cats || 0;
     this.terrainVer++;
@@ -861,11 +1000,11 @@ class Sim {
 
 function fmtSpan(y) {
   if (y >= 1e9) return (y / 1e9).toFixed(2) + ' billion years';
-  if (y >= 1.5e6) return (y / 1.5e6).toFixed(y >= 1e8 ? 0 : 1) + ' million years';
+  if (y >= 1e6) return (y / 1e6).toFixed(y >= 1e8 ? 0 : 1) + ' million years';
   return Math.round(y / 1e3) + ' thousand years';
 }
 
-const api = { Sim, W, H, YPT, TC, TW, TH, GENES, NI, NH, NO, O1, O2, O3, NB, IN_LABELS, SEED_LINKS, links, hiddenUsed, fmtSpan };
+const api = { Sim, W, H, YPT, TC, TW, TH, GENES, NI, NO, MAXH, SEG, NSEG, S_BODY, S_FIN, S_LEG, S_EYE, S_JAW, S_SHELL, S_SPINE, S_FAT, S_FEEL, IN_LABELS, OUT_LABELS, SEED_LINKS, links, hiddenUsed, activeNeurons, memoryNeurons, segCounts, complexity, fmtSpan };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Evo = api;
 })(typeof window !== 'undefined' ? window : this);
 
@@ -873,18 +1012,18 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
 <script>
 (function(){
 'use strict';
-const { Sim, W, H, YPT, TC, TW, TH, NI, NH, NO, O1, O2, O3, IN_LABELS, links, hiddenUsed } = window.Evo;
+const { Sim, W, H, YPT, TC, TW, TH, NI, NO, IN_LABELS, OUT_LABELS, links, activeNeurons, memoryNeurons, segCounts, complexity, S_BODY, S_FIN, S_LEG, S_EYE, S_JAW, S_SHELL, S_SPINE, S_FAT, S_FEEL } = window.Evo;
 const TAU = Math.PI * 2;
 const UM = 25; // micrometres per world unit
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const $ = id => document.getElementById(id);
 
-const SAVE_KEY = 'genesis-pool-save-v2';
-const CATCH_RATE = 90, CATCH_MAX = 18000; // ticks per real second at 1x, and the catch-up cap
+const SAVE_KEY = 'genesis-pool-save-v3';
+const CATCH_RATE = 90, CATCH_MAX = 12000; // ticks per real second at 1x, and the catch-up cap
 let storageOK = true, saved = null;
 try { const raw = localStorage.getItem(SAVE_KEY); saved = raw ? JSON.parse(raw) : null; } catch (e) { storageOK = false; saved = null; }
 let sim = null;
-if (saved && saved.v === 2) { try { sim = new Sim(saved.seed, saved); } catch (e) { sim = null; saved = null; } }
+if (saved && saved.v === 3) { try { sim = new Sim(saved.seed, saved); } catch (e) { sim = null; saved = null; } }
 const isNewWorld = !sim;
 if (!sim) sim = new Sim((Math.random() * 1e9) | 0);
 const SPEEDS = [{ k: '½×', s: 0.75 }, { k: '1×', s: 1.5 }, { k: '4×', s: 6 }, { k: '12×', s: 18 }];
@@ -902,102 +1041,113 @@ function shortTime(t) {
   return y >= 1e9 ? (y / 1e9).toFixed(2) + ' Gy' : Math.round(y / 1e6) + ' My';
 }
 const dietLabel = d => d > 0.55 ? 'Predator' : d > 0.3 ? 'Omnivore' : d > 0.15 ? 'Grazer, scavenges' : 'Grazer';
-const eyeLabel = s => s > 0.6 ? 'Paired eyes' : s > 0.3 ? 'Eyespot' : 'None';
-const bodyMM = size => ((2.2 + size * 3) * 2 * UM / 1000);
+const massOf = g => g.size * (0.7 + 0.3 * g.segs.length);
+const bodyMM = mass => ((1.2 + 3.2 * Math.pow(mass, 0.6)) * 2 * UM / 1000);
+const PART_NAMES = [['body section', 'body sections'], ['fin', 'fins'], ['leg pair', 'leg pairs'], ['eye pair', 'eye pairs'], ['jaw', 'jaws'], ['shell plate', 'shell plates'], ['spine ring', 'spine rings'], ['fat store', 'fat stores'], ['feeler pair', 'feeler pairs']];
+function countsOf(g) { return g._n || (g._n = segCounts(g.segs)); }
+function partsList(n) {
+  const out = [];
+  for (let t = 1; t < n.length; t++) if (n[t] >= 0.5) { const k = Math.round(n[t]); out.push(k + ' ' + PART_NAMES[t][k === 1 ? 0 : 1]); }
+  return out.length ? out.join(', ') : 'none yet';
+}
 function traitLine(m) {
+  const n = m.count || [];
   const t = [dietLabel(m.diet)];
-  if (m.sense > 0.3) t.push(m.sense > 0.6 ? 'eyes' : 'eyespot');
-  if (m.speed > 1.3) t.push('swimmer');
-  if (m.size > 1.6) t.push('multicellular');
-  if (m.armor > 0.3) t.push('spined');
-  if (m.terr > 0.55) t.push('walks on land'); else if (m.terr > 0.3) t.push('amphibious');
-  if (m.links !== undefined && m.links > 22) t.push(Math.round(m.links) + ' neural links');
-  t.push(bodyMM(m.size).toFixed(2) + ' mm');
+  t.push(Math.round(m.segs) + '-part body');
+  if (n[S_EYE] >= 0.8) t.push(n[S_EYE] >= 1.5 ? 'many eyes' : 'eyes');
+  if (m.terr > 0.45 && n[S_LEG] >= 0.8) t.push('walks on land'); else if (n[S_FIN] >= 1.5) t.push('swimmer');
+  if (n[S_SHELL] >= 0.8) t.push('shelled');
+  if (n[S_SPINE] >= 0.8) t.push('spined');
+  if (m.neurons >= 1.5) t.push(Math.round(m.neurons) + '-neuron brain');
+  if (m.mass) t.push(bodyMM(m.mass).toFixed(2) + ' mm');
   return t.join(' · ');
 }
 
-/* ---------- organism drawing ---------- */
-function drawMorph(ctx, x, y, a, g, hue, r, ph, alpha) {
+/* ---------- organism drawing: a chain of body sections, each carrying its own part ---------- */
+function drawMorph(ctx, x, y, a, g, hue, r, ph, alpha, sig) {
+  const segs = g.segs, ns = segs.length;
   ctx.save();
   ctx.translate(x, y); ctx.rotate(a); ctx.globalAlpha = alpha;
-  const lw = Math.max(0.45, r * 0.1);
-  const ex = 1 + Math.min(0.5, g.speed * 0.14), ey = 1 / (1 + Math.min(0.25, g.speed * 0.06));
-  if (g.speed > 0.7 && g.terr < 0.6) {
-    const n = g.size > 2.2 ? 2 : 1, len = r * (0.7 + g.speed * 0.5), amp = r * 0.22;
-    ctx.strokeStyle = `hsla(${hue},45%,74%,.75)`; ctx.lineWidth = lw;
-    for (let k = 0; k < n; k++) {
-      const off = n === 2 ? (k ? 1 : -1) * r * 0.32 : 0;
-      ctx.beginPath();
-      for (let i = 0; i <= 10; i++) {
-        const u = i / 10, px = -r * 0.85 * ex - len * u, py = off * (1 - u * 0.3) + Math.sin(ph - u * 5 + k * 1.7) * amp * u;
-        i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+  const span = r * (ns === 1 ? 0 : 0.95);
+  const step = ns > 1 ? (2 * span) / (ns - 1) : 0;
+  const rs = ns === 1 ? r : Math.max(r * 0.34, Math.min(r * 0.75, step * 0.75 + r * 0.12));
+  const water = g.terr < 0.5;
+  const lw = Math.max(0.4, rs * 0.16);
+  const px = new Array(ns), py = new Array(ns);
+  for (let i = 0; i < ns; i++) { px[i] = span - step * i; py[i] = ns > 1 ? Math.sin(ph * 0.7 - i * 0.9) * rs * (water ? 0.35 : 0.12) * (i / ns) : 0; }
+  // appendages under the body
+  ctx.lineCap = 'round';
+  for (let i = 0; i < ns; i++) {
+    const t = segs[i], sx = px[i], sy = py[i], sr = rs * (t === S_SHELL ? 1.12 : t === S_FAT ? 1.15 : 1);
+    if (t === S_FIN) {
+      const fl = rs * 1.1, flap = Math.sin(ph + i) * 0.35;
+      ctx.fillStyle = `hsla(${hue},45%,70%,.75)`;
+      if (i === ns - 1 && ns > 1) {
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx - fl * 1.4, sy - fl * (0.8 + flap)); ctx.lineTo(sx - fl * 1.1, sy); ctx.lineTo(sx - fl * 1.4, sy + fl * (0.8 - flap)); ctx.closePath(); ctx.fill();
+      } else {
+        ctx.beginPath(); ctx.moveTo(sx + sr * 0.3, sy - sr * 0.6); ctx.lineTo(sx - fl * 0.9, sy - sr - fl * (0.7 + flap)); ctx.lineTo(sx - sr * 0.4, sy - sr * 0.5); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(sx + sr * 0.3, sy + sr * 0.6); ctx.lineTo(sx - fl * 0.9, sy + sr + fl * (0.7 - flap)); ctx.lineTo(sx - sr * 0.4, sy + sr * 0.5); ctx.closePath(); ctx.fill();
       }
+    } else if (t === S_LEG) {
+      const L = rs * 1.5, sw = Math.sin(ph * 0.8 + i * 1.7) * rs * 0.6;
+      ctx.strokeStyle = `hsla(${hue},30%,72%,.95)`; ctx.lineWidth = lw * 1.1;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - sr * 0.7); ctx.lineTo(sx + sw * 0.5, sy - sr - L * 0.55); ctx.lineTo(sx + sw, sy - sr - L);
+      ctx.moveTo(sx, sy + sr * 0.7); ctx.lineTo(sx - sw * 0.5, sy + sr + L * 0.55); ctx.lineTo(sx - sw, sy + sr + L);
+      ctx.stroke();
+    } else if (t === S_SPINE) {
+      ctx.strokeStyle = `hsla(${hue},25%,86%,.9)`; ctx.lineWidth = lw * 0.8;
+      ctx.beginPath();
+      for (let k = 0; k < 7; k++) { const an = k / 7 * TAU + 0.3; ctx.moveTo(sx + Math.cos(an) * sr * 0.8, sy + Math.sin(an) * sr * 0.8); ctx.lineTo(sx + Math.cos(an) * sr * 1.8, sy + Math.sin(an) * sr * 1.8); }
+      ctx.stroke();
+    } else if (t === S_FEEL) {
+      ctx.strokeStyle = `hsla(${hue},35%,78%,.85)`; ctx.lineWidth = lw * 0.6;
+      const L = rs * 2.4, w = Math.sin(ph * 0.5 + i) * rs * 0.4;
+      ctx.beginPath();
+      ctx.moveTo(sx + sr * 0.5, sy - sr * 0.4); ctx.quadraticCurveTo(sx + L * 0.6, sy - sr - L * 0.3 + w, sx + L, sy - sr - L * 0.5);
+      ctx.moveTo(sx + sr * 0.5, sy + sr * 0.4); ctx.quadraticCurveTo(sx + L * 0.6, sy + sr + L * 0.3 - w, sx + L, sy + sr + L * 0.5);
       ctx.stroke();
     }
   }
-  if (g.terr > 0.3) {
-    const pairs = g.size > 2.5 ? 3 : 2, L = r * (0.45 + g.terr * 0.5);
-    ctx.strokeStyle = `hsla(${hue},30%,72%,.9)`; ctx.lineWidth = lw * 1.2; ctx.lineCap = 'round';
-    ctx.beginPath();
-    for (let k = 0; k < pairs; k++) {
-      const fx = (pairs === 2 ? (k ? -0.35 : 0.35) : (k - 1) * -0.45) * r * ex, sw = Math.sin(ph * 0.6 + k * 2) * r * 0.25;
-      ctx.moveTo(fx, -r * 0.6 * ey); ctx.lineTo(fx + sw, -r * ey - L);
-      ctx.moveTo(fx, r * 0.6 * ey); ctx.lineTo(fx - sw, r * ey + L);
-    }
-    ctx.stroke(); ctx.lineCap = 'butt';
-  }
-  if (g.armor > 0.3) {
-    const n = 6 + Math.round(g.armor * 8), L = r * (0.25 + g.armor * 0.6);
-    ctx.strokeStyle = `hsla(${hue},25%,84%,.85)`; ctx.lineWidth = lw * 0.9;
-    ctx.beginPath();
-    for (let k = 0; k < n; k++) {
-      const an = k / n * TAU + 0.2, c = Math.cos(an), s = Math.sin(an);
-      ctx.moveTo(c * r * 0.9 * ex, s * r * 0.9 * ey); ctx.lineTo(c * (r * ex + L), s * (r * ey + L));
-    }
-    ctx.stroke();
-  }
-  const lobes = g.size > 1.6 ? Math.min(7, 3 + Math.floor((g.size - 1.6) * 1.8)) : 0;
-  ctx.beginPath();
-  for (let i = 0; i <= 24; i++) {
-    const th = i / 24 * TAU;
-    const rr = r * (1 + (lobes ? 0.12 * Math.sin(lobes * th + ph * 0.15) : 0.05 * Math.sin(3 * th + ph * 0.3)));
-    const px = Math.cos(th) * rr * ex, py = Math.sin(th) * rr * ey;
-    i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
-  }
-  ctx.closePath();
-  ctx.fillStyle = `hsla(${hue},56%,${lobes ? 50 : 56}%,.86)`; ctx.fill();
-  ctx.strokeStyle = `hsla(${hue},70%,80%,.9)`; ctx.lineWidth = lw * 0.8; ctx.stroke();
-  if (lobes) {
-    ctx.fillStyle = `hsla(${hue},55%,72%,.32)`;
-    for (let k = 0; k < lobes; k++) {
-      const an = k / lobes * TAU;
-      ctx.beginPath(); ctx.arc(Math.cos(an) * r * 0.52 * ex, Math.sin(an) * r * 0.52 * ey, r * 0.22, 0, TAU); ctx.fill();
+  // the sections themselves, tail first so the head sits on top
+  for (let i = ns - 1; i >= 0; i--) {
+    const t = segs[i], sx = px[i], sy = py[i];
+    const sr = rs * (t === S_SHELL ? 1.12 : t === S_FAT ? 1.15 : i === 0 ? 1.05 : 1);
+    const light = t === S_FAT ? 70 : t === S_SHELL ? 40 : 54 - (i / Math.max(1, ns)) * 8;
+    ctx.fillStyle = `hsla(${hue},${t === S_SHELL ? 35 : 56}%,${light}%,.92)`;
+    ctx.beginPath(); ctx.ellipse(sx, sy, sr * (ns > 1 ? 0.95 : 1.15), sr, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = t === S_SHELL ? `hsla(${hue},30%,82%,.95)` : `hsla(${hue},70%,80%,.8)`;
+    ctx.lineWidth = t === S_SHELL ? lw * 1.3 : lw * 0.7; ctx.stroke();
+    if (t === S_SHELL) { ctx.beginPath(); ctx.moveTo(sx - sr * 0.55, sy - sr * 0.3); ctx.lineTo(sx + sr * 0.55, sy - sr * 0.3); ctx.moveTo(sx - sr * 0.55, sy + sr * 0.3); ctx.lineTo(sx + sr * 0.55, sy + sr * 0.3); ctx.stroke(); }
+    if (t === S_JAW) {
+      ctx.strokeStyle = 'hsla(8,78%,68%,.95)'; ctx.lineWidth = lw * 1.2;
+      const fx = sx + sr * 0.7, reach = i === 0 ? sr * 0.9 : sr * 0.6;
+      ctx.beginPath();
+      ctx.moveTo(fx, sy - sr * 0.45); ctx.quadraticCurveTo(fx + reach, sy - sr * 0.5, fx + reach * 1.1, sy - sr * 0.05);
+      ctx.moveTo(fx, sy + sr * 0.45); ctx.quadraticCurveTo(fx + reach, sy + sr * 0.5, fx + reach * 1.1, sy + sr * 0.05);
+      ctx.stroke();
+    } else if (t === S_EYE) {
+      const er = Math.max(0.55, sr * 0.3);
+      for (const s of [-1, 1]) {
+        ctx.fillStyle = '#F3F0E4'; ctx.beginPath(); ctx.arc(sx + sr * 0.3, sy + s * sr * 0.42, er, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#0B1A1E'; ctx.beginPath(); ctx.arc(sx + sr * 0.3 + er * 0.35, sy + s * sr * 0.42, er * 0.5, 0, TAU); ctx.fill();
+      }
+    } else if (i === 0 && ns === 1) {
+      ctx.fillStyle = `hsla(${hue},45%,26%,.8)`; ctx.beginPath(); ctx.arc(-sr * 0.1, 0, sr * 0.3, 0, TAU); ctx.fill();
     }
   }
-  ctx.fillStyle = `hsla(${hue},45%,26%,.85)`;
-  ctx.beginPath(); ctx.arc(-r * 0.12, 0, r * 0.27, 0, TAU); ctx.fill();
-  if (g.diet > 0.5) {
-    ctx.strokeStyle = 'hsla(8,78%,68%,.95)'; ctx.lineWidth = lw * 1.1;
-    ctx.beginPath();
-    ctx.moveTo(r * ex * 0.82, -r * 0.34); ctx.lineTo(r * ex * 1.3, -r * 0.05);
-    ctx.moveTo(r * ex * 0.82, r * 0.34); ctx.lineTo(r * ex * 1.3, r * 0.05);
-    ctx.stroke();
+  if (sig) {
+    ctx.strokeStyle = `hsla(${hue},90%,80%,.85)`; ctx.lineWidth = lw * 1.2;
+    ctx.beginPath(); ctx.arc(px[0], py[0], rs * 1.9, 0, TAU); ctx.stroke();
   }
-  if (g.sense > 0.3) {
-    const er = Math.max(0.6, r * (0.12 + g.sense * 0.13));
-    const pts = g.sense > 0.6 ? [[r * 0.45 * ex, -r * 0.33 * ey], [r * 0.45 * ex, r * 0.33 * ey]] : [[r * 0.5 * ex, 0]];
-    for (const p of pts) {
-      ctx.fillStyle = '#F3F0E4'; ctx.beginPath(); ctx.arc(p[0], p[1], er, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#0B1A1E'; ctx.beginPath(); ctx.arc(p[0] + er * 0.3, p[1], er * 0.5, 0, TAU); ctx.fill();
-    }
-  }
+  ctx.lineCap = 'butt';
   ctx.restore();
 }
 function portrait(cv, g, hue) {
   const c = cv.getContext('2d'), s = cv.width;
   c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, s, s);
-  const r = s * (0.13 + Math.min(1, g.size / 5) * 0.14);
-  drawMorph(c, s * 0.47, s / 2, 0, g, hue, r, 1.2, 1);
+  const ns = g.segs.length, r = s * (0.16 + Math.min(1, massOf(g) / 6) * 0.08) / (ns > 4 ? 1 + (ns - 4) * 0.06 : 1);
+  drawMorph(c, s * 0.5, s / 2, 0, g, hue, r, 1.2, 1, false);
 }
 
 /* ---------- world canvas ---------- */
@@ -1014,9 +1164,10 @@ function resize() {
 new ResizeObserver(resize).observe(cv);
 resize();
 
+const view = { x: W / 2, y: H / 2, z: 1 };
 function updateCamera() {
-  let tx = W / 2, ty = H / 2, tz = 1;
-  if (follow && selected && !selected.dead) { tx = selected.x; ty = selected.y; tz = 2.8; }
+  let tx = view.x, ty = view.y, tz = view.z;
+  if (follow && selected && !selected.dead) { tx = selected.x; ty = selected.y; tz = Math.max(2.8, view.z); }
   cam.z += (tz - cam.z) * 0.08;
   cam.x += (tx - cam.x) * 0.1; cam.y += (ty - cam.y) * 0.1;
   const s = fit * cam.z, hw = cw / 2 / s, hh = ch / 2 / s;
@@ -1026,7 +1177,7 @@ function updateCamera() {
 
 const PLANT_COLORS = ['rgba(150,205,120,.78)', 'rgba(110,170,95,.82)', 'rgba(80,130,80,.9)', 'rgba(196,200,110,.8)', 'rgba(170,175,90,.85)', 'rgba(140,145,75,.9)'];
 const plantPaths = [];
-const TR = 5, TWR = TW * TR, THR = TH * TR;
+const TR = 10, TWR = TW * TR, THR = TH * TR;
 const terrCv = document.createElement('canvas'); terrCv.width = TWR; terrCv.height = THR;
 const tctx = terrCv.getContext('2d');
 let terrVer = -1, terrSea = -1;
@@ -1109,7 +1260,7 @@ function draw() {
       ctx.fillStyle = c.kills && c.ate > 6 ? 'rgba(229,122,98,.22)' : 'rgba(242,184,100,.16)';
       ctx.beginPath(); ctx.arc(c.x, c.y, c.r * 1.9, 0, TAU); ctx.fill();
     }
-    drawMorph(ctx, c.x, c.y, c.a, c.g, c.sp.hue, c.r, reduceMotion ? ph0 : c.ph, alpha);
+    drawMorph(ctx, c.x, c.y, c.a, c.g, c.sp.hue, c.r, reduceMotion ? ph0 : c.ph, alpha, c.sig > 0);
   }
 
   // impact flash
@@ -1146,7 +1297,30 @@ function draw() {
 }
 
 /* ---------- picking ---------- */
+function toWorld(e) {
+  const r = cv.getBoundingClientRect(), s = fit * cam.z;
+  return [(e.clientX - r.left - cw / 2) / s + cam.x, (e.clientY - r.top - ch / 2) / s + cam.y];
+}
+function setZoom(z, wx, wy) {
+  view.z = z; view.x = z > 1 ? wx : W / 2; view.y = z > 1 ? wy : H / 2;
+  $('zoom').textContent = z > 1 ? 'Zoom out' : 'Zoom in';
+  cv.style.touchAction = z > 1 ? 'none' : 'manipulation';
+}
+let drag = null, dragged = false;
+cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y }; dragged = false; });
+cv.addEventListener('pointermove', e => {
+  if (!drag || view.z <= 1) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (!dragged && Math.hypot(dx, dy) < 6) return;
+  dragged = true; follow = false; $('iFollow').textContent = 'Follow';
+  const s = fit * view.z;
+  view.x = Math.min(W, Math.max(0, drag.vx - dx / s)); view.y = Math.min(H, Math.max(0, drag.vy - dy / s));
+});
+window.addEventListener('pointerup', () => { drag = null; });
+cv.addEventListener('dblclick', e => { e.preventDefault(); const [wx, wy] = toWorld(e); setZoom(view.z > 1 ? 1 : 3, wx, wy); });
+$('zoom').addEventListener('click', () => setZoom(view.z > 1 ? 1 : 3, cam.x, cam.y));
 cv.addEventListener('click', e => {
+  if (dragged) { dragged = false; return; }
   const r = cv.getBoundingClientRect();
   const s = fit * cam.z;
   const wx = (e.clientX - r.left - cw / 2) / s + cam.x, wy = (e.clientY - r.top - ch / 2) / s + cam.y;
@@ -1171,46 +1345,52 @@ function renderInspector(force) {
   $('iDead').hidden = !c.dead;
   if (c.dead && follow) { follow = false; $('iFollow').textContent = 'Follow'; }
   $('iEnergy').style.width = Math.max(0, Math.min(100, c.e / c.cap * 100)).toFixed(0) + '%';
-  const g = c.g;
+  const g = c.g, n = countsOf(g);
   const rows = [
-    ['Age', (c.age * YPT / 1e6).toFixed(1) + ' My'],
+    ['Age', (c.age * YPT / 1e6).toFixed(0) + ' My'],
     ['Energy', Math.max(0, c.e).toFixed(0) + ' / ' + c.cap.toFixed(0)],
     ['Diet', dietLabel(g.diet)],
-    ['Body', bodyMM(g.size).toFixed(2) + ' mm'],
-    ['Vision', eyeLabel(g.sense) + (g.sense > 0.3 ? ', ' + (c.senseR * UM / 1000).toFixed(1) + ' mm' : '')],
-    ['Movement', g.terr > 0.55 ? (g.size > 2.5 ? 'Three pairs of legs' : 'Two pairs of legs') : g.terr > 0.3 ? 'Stubby legs and fins' : g.speed > 1.3 ? 'Strong flagella' : g.speed > 0.7 ? 'Flagellum' : 'Drifts'],
+    ['Body', g.segs.length + ' sections, ' + bodyMM(c.mass).toFixed(2) + ' mm'],
+    ['Parts', partsList(n)],
+    ['Movement', (() => { const v = g.terr > 0.45 && n[S_LEG] ? c.vLand : c.vWater; return (g.terr > 0.45 && n[S_LEG] ? 'Walks' : n[S_FIN] || n[S_LEG] ? 'Swims' : 'Drifts') + ', ' + (v > 1.6 ? 'fast' : v > 0.9 ? 'steady' : 'slow'); })()],
     ['Habitat', g.terr > 0.55 ? 'Land' : g.terr > 0.3 ? 'Shoreline' : 'Water'],
-    ['Defense', g.armor > 0.3 ? 'Spines' : 'None'],
-    ['Prefers', tempC(g.tpref).toFixed(0) + '°C water'],
-    ['Offspring', String(1 + Math.floor(g.litter * 2.999)) + ' per division']
+    ['Prefers', tempC(g.tpref).toFixed(0) + '°C'],
+    ['Offspring', String(1 + Math.floor(g.litter * 2.999)) + ' per mating'],
+    ['Complexity', complexity(g).toFixed(1)]
   ];
   if (c.kills) rows.push(['Kills', String(c.kills)]);
   $('iStats').innerHTML = rows.map(r => `<dt>${r[0]}</dt><dd>${r[1]}</dd>`).join('');
   if (force) drawBrain(g.B);
-  const hu = hiddenUsed(g.B);
-  $('brainCap').textContent = links(g.B) + ' neural links' + (hu ? ', ' + hu + ' inner neuron' + (hu > 1 ? 's' : '') + ' in use' : ', sensors wired straight to muscles');
+  const hu = activeNeurons(g.B), mm = memoryNeurons(g.B);
+  $('brainCap').textContent = links(g.B) + ' neural links, ' + (hu ? hu + ' inner neuron' + (hu > 1 ? 's' : '') + ' in use' + (mm ? ' (' + mm + ' with memory)' : '') : 'no inner neurons yet') + (c.sig ? '. Signaling now.' : '');
 }
 function drawBrain(B) {
-  const c = $('brainCv'), x = c.getContext('2d'), w = c.width, h = c.height;
-  x.clearRect(0, 0, w, h);
-  const ix = 190, hx = 310, oxp = 405;
-  const iy = i => 10 + i * ((h - 20) / (NI - 1)), hy = j => 30 + j * ((h - 60) / (NH - 1)), oy = k => h * (k ? 0.66 : 0.34);
+  const c = $('brainCv'), x = c.getContext('2d'), w = c.width, hgt = c.height;
+  x.clearRect(0, 0, w, hgt);
+  const nh = B.h.length, ix = 185, hx = 300, oxp = 400;
+  const iy = i => 12 + i * ((hgt - 24) / (NI - 1)), hy = j => nh <= 1 ? hgt / 2 : 24 + j * ((hgt - 48) / (nh - 1)), oy = k => hgt * (0.25 + k * 0.25);
   const line = (x1, y1, x2, y2, wv) => {
-    x.strokeStyle = wv > 0 ? `rgba(242,184,100,${Math.min(0.9, 0.25 + Math.abs(wv) * 0.25)})` : `rgba(127,178,224,${Math.min(0.9, 0.25 + Math.abs(wv) * 0.25)})`;
-    x.lineWidth = Math.min(5, 0.8 + Math.abs(wv) * 1.2);
+    x.strokeStyle = wv > 0 ? `rgba(242,184,100,${Math.min(0.9, 0.2 + Math.abs(wv) * 0.25)})` : `rgba(127,178,224,${Math.min(0.9, 0.2 + Math.abs(wv) * 0.25)})`;
+    x.lineWidth = Math.min(5, 0.7 + Math.abs(wv) * 1.1);
     x.beginPath(); x.moveTo(x1, y1); x.lineTo(x2, y2); x.stroke();
   };
-  for (let i = 0; i < NI; i++) for (let k = 0; k < NO; k++) { const wv = B[O3 + i * NO + k]; if (wv) line(ix, iy(i), oxp, oy(k), wv); }
-  for (let i = 0; i < NI; i++) for (let j = 0; j < NH; j++) { const wv = B[O1 + i * NH + j]; if (wv) line(ix, iy(i), hx, hy(j), wv); }
-  for (let j = 0; j < NH; j++) for (let k = 0; k < NO; k++) { const wv = B[O2 + j * NO + k]; if (wv) line(hx, hy(j), oxp, oy(k), wv); }
-  x.font = '21px "IBM Plex Mono", ui-monospace, monospace'; x.textBaseline = 'middle';
+  for (let i = 0; i < NI; i++) for (let k = 0; k < NO; k++) { const wv = B.wd[i * NO + k]; if (wv) line(ix, iy(i), oxp, oy(k), wv); }
+  B.h.forEach((nr, j) => {
+    for (let i = 0; i < NI; i++) if (nr.i[i]) line(ix, iy(i), hx, hy(j), nr.i[i]);
+    for (let k = 0; k < NO; k++) if (nr.o[k]) line(hx, hy(j), oxp, oy(k), nr.o[k]);
+  });
+  x.font = '19px "IBM Plex Mono", ui-monospace, monospace'; x.textBaseline = 'middle';
   for (let i = 0; i < NI; i++) {
     x.fillStyle = '#88A39E'; x.textAlign = 'right'; x.fillText(IN_LABELS[i], ix - 10, iy(i));
-    x.fillStyle = '#DCE6DE'; x.beginPath(); x.arc(ix, iy(i), 4, 0, TAU); x.fill();
+    x.fillStyle = '#DCE6DE'; x.beginPath(); x.arc(ix, iy(i), 3.5, 0, TAU); x.fill();
   }
-  for (let j = 0; j < NH; j++) { x.fillStyle = '#557570'; x.beginPath(); x.arc(hx, hy(j), 6, 0, TAU); x.fill(); }
+  B.h.forEach((nr, j) => {
+    const live = nr.i.some(v => v) && nr.o.some(v => v);
+    if (nr.s) { x.strokeStyle = 'rgba(195,166,238,.9)'; x.lineWidth = 2; x.beginPath(); x.arc(hx, hy(j) - 9, 7, 0.3, Math.PI * 2 - 0.3); x.stroke(); }
+    x.fillStyle = live ? '#C3A6EE' : '#3A5A58'; x.beginPath(); x.arc(hx, hy(j), 6, 0, TAU); x.fill();
+  });
   x.textAlign = 'left';
-  ['turn', 'speed'].forEach((lab, k) => { x.fillStyle = '#F2B864'; x.beginPath(); x.arc(oxp, oy(k), 7, 0, TAU); x.fill(); x.fillStyle = '#DCE6DE'; x.fillText(lab, oxp + 12, oy(k)); });
+  OUT_LABELS.forEach((lab, k) => { x.fillStyle = '#F2B864'; x.beginPath(); x.arc(oxp, oy(k), 7, 0, TAU); x.fill(); x.fillStyle = '#DCE6DE'; x.fillText(lab, oxp + 12, oy(k)); });
 }
 
 /* ---------- controls ---------- */
@@ -1273,7 +1453,7 @@ function renderSpecies() {
     li.tabIndex = 0; li.setAttribute('role', 'button'); li.setAttribute('aria-pressed', spot === sp);
     li.title = 'Highlight in the sea';
     const pc = document.createElement('canvas'); pc.width = 80; pc.height = 80;
-    portrait(pc, sp.mean, sp.hue);
+    portrait(pc, sp.rep, sp.hue);
     const mid = document.createElement('div');
     mid.innerHTML = `<div class="nm"></div><div class="tr"></div>`;
     mid.children[0].textContent = sp.name; mid.children[1].textContent = traitLine(sp.mean);
@@ -1292,10 +1472,10 @@ const VITALS = [
   { k: 'Species', col: '#F2B864', get: h => h.spc, fmt: v => Math.round(v), lo: 0 },
   { k: 'Plants', col: '#96CD78', get: h => h.plants || 0, fmt: v => Math.round(v), lo: 0 },
   { k: 'Oxygen', col: '#7FC4D8', get: h => h.oxy || 0, fmt: v => Math.round(v * 100) + '%', lo: 0, hi: 1 },
-  { k: 'Body diameter', col: '#9CC7A6', get: h => bodyMM(h.size), fmt: v => v.toFixed(2) + ' mm', lo: 0, hi: bodyMM(5) },
-  { k: 'Neural links', col: '#C3A6EE', get: h => h.links || 0, fmt: v => v.toFixed(0), lo: 0 },
+  { k: 'Top complexity', col: '#F3F0E4', get: h => h.cx || 0, fmt: v => v.toFixed(1), lo: 0 },
+  { k: 'Body sections', col: '#9CC7A6', get: h => h.segs || 0, fmt: v => v.toFixed(1), lo: 0 },
+  { k: 'Inner neurons', col: '#C3A6EE', get: h => h.neurons || 0, fmt: v => v.toFixed(1), lo: 0 },
   { k: 'Meat in diet', col: '#E57A62', get: h => h.diet, fmt: v => Math.round(v * 100) + '%', lo: 0, hi: 1 },
-  { k: 'Armor', col: '#D8CDB8', get: h => h.armor, fmt: v => Math.round(v * 100) + '%', lo: 0, hi: 1 },
   { k: 'Living on land', col: '#C8B478', get: h => h.land || 0, fmt: v => Math.round(v * 100) + '%', lo: 0, hi: 1 },
   { k: 'Climate', col: '#E0A07A', get: h => tempC(h.temp), fmt: v => v.toFixed(1) + '°C', lo: 4, hi: 24 }
 ];
@@ -1388,7 +1568,7 @@ function renderChronicle() {
     const li = document.createElement('li'); li.className = e.kind;
     const t = document.createElement('time'); t.textContent = shortTime(e.t);
     const dot = document.createElement('span'); dot.className = 'dot';
-    dot.style.background = e.hue !== null ? `hsl(${e.hue},60%,64%)` : e.kind === 'climate' ? '#7FB2E0' : e.kind === 'era' || e.kind === 'genesis' || e.kind === 'away' || e.kind === 'stage' ? '#F2B864' : e.kind === 'catastrophe' ? '#E57A62' : '#557570';
+    dot.style.background = e.hue !== null ? `hsl(${e.hue},60%,64%)` : e.kind === 'climate' ? '#7FB2E0' : e.kind === 'era' || e.kind === 'genesis' || e.kind === 'away' || e.kind === 'stage' ? '#F2B864' : e.kind === 'catastrophe' ? '#E57A62' : e.kind === 'record' ? '#F3F0E4' : '#557570';
     const p = document.createElement('p'); p.textContent = e.text;
     li.append(t, dot, p); chron.appendChild(li);
   }
@@ -1403,7 +1583,8 @@ function renderHeader() {
   $('sSpc').textContent = spc;
   $('sGen').textContent = sim.maxGen;
   $('sOxy').textContent = Math.round(sim.oxygen * 100) + '%';
-  $('sTemp').textContent = tempC(sim.climate).toFixed(1) + '°C';
+  const lastH = sim.history[sim.history.length - 1];
+  $('sCx').textContent = lastH ? lastH.cx.toFixed(1) : '0';
 }
 
 function refreshSide(all) {
