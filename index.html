@@ -1,0 +1,1458 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>Genesis Pool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  color-scheme: dark;
+  --deep:#07171C; --sea:#0A2128; --panel:#0D252C; --rule:#1B3940; --rule2:#24474F;
+  --ink:#DCE6DE; --dim:#88A39E; --faint:#557570;
+  --lume:#F2B864; --coral:#E57A62; --kelp:#A7C98A; --cold:#7FB2E0;
+  --serif:'Young Serif', Georgia, 'Times New Roman', serif;
+  --sans:'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono:'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{margin:0;background:var(--deep);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit}
+button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--lume);outline-offset:2px}
+.app{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;padding-inline:16px;padding-block:12px}
+
+/* header */
+header{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 32px}
+.brand{display:flex;flex-direction:column;gap:2px;margin-right:auto}
+.brand h1{font-family:var(--serif);font-weight:400;font-size:27px;line-height:1.05;margin:0;letter-spacing:.005em}
+.brand p{margin:0;color:var(--dim);font-size:12.5px}
+.clock{display:flex;align-items:baseline;gap:8px}
+.clock b{font-family:var(--mono);font-weight:500;font-size:30px;line-height:1;color:var(--lume);font-variant-numeric:tabular-nums}
+.clock span{color:var(--dim);font-size:12.5px}
+dl.stats{display:flex;flex-wrap:wrap;gap:6px 22px;margin:0}
+dl.stats div{display:flex;flex-direction:column}
+dl.stats dt{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint)}
+dl.stats dd{margin:0;font-family:var(--mono);font-size:15px;font-variant-numeric:tabular-nums}
+dl.stats dd.era{font-family:var(--serif);font-size:16px;color:var(--lume)}
+
+/* layout */
+main{display:grid;grid-template-columns:minmax(0,1fr) 348px;gap:14px;min-height:0}
+.stage-wrap{position:relative;min-height:0;display:flex;flex-direction:column}
+.stage{flex:1;position:relative;background:var(--sea);border:1px solid var(--rule);border-radius:12px;overflow:hidden;min-height:0}
+#world{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair;touch-action:manipulation}
+aside{min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:22px;padding-right:4px;scrollbar-width:thin;scrollbar-color:var(--rule2) transparent}
+section h2{font-family:var(--serif);font-weight:400;font-size:17px;margin:0;text-wrap:balance}
+.sec-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
+.sec-head small{color:var(--faint);font-size:11.5px}
+
+/* hud */
+.hud{position:absolute;left:12px;bottom:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pill{display:flex;background:rgba(7,23,28,.86);border:1px solid var(--rule2);border-radius:999px;padding:3px;backdrop-filter:blur(6px)}
+.pill button{background:none;border:0;border-radius:999px;padding:5px 11px;font-size:12.5px;cursor:pointer;color:var(--dim);font-family:var(--mono)}
+.pill button:hover{color:var(--ink)}
+.pill button[aria-pressed="true"]{background:var(--rule2);color:var(--ink)}
+.pill button.go{color:var(--ink);font-family:var(--sans);font-weight:500;min-width:74px}
+.pill button.warn{color:var(--coral)}
+.hint{position:absolute;right:12px;bottom:14px;font-size:11.5px;color:var(--faint);pointer-events:none}
+.catch{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(340px,calc(100% - 32px));background:rgba(9,29,35,.94);border:1px solid var(--rule2);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;text-align:center}
+.catch p{margin:0;font-family:var(--serif);font-size:16px}
+.catch small{color:var(--dim);font-size:12px}
+.catch .bar{height:6px}
+
+/* inspector */
+.inspect{position:absolute;left:12px;top:12px;width:264px;max-width:calc(100% - 24px);background:rgba(9,29,35,.93);border:1px solid var(--rule2);border-radius:10px;padding:12px 14px;backdrop-filter:blur(6px);display:flex;flex-direction:column;gap:8px}
+.inspect .top{display:flex;gap:10px;align-items:center}
+.inspect canvas{width:44px;height:44px;flex:none;border-radius:8px;background:var(--sea)}
+.inspect h3{margin:0;font-family:var(--serif);font-weight:400;font-size:15px;font-style:italic;line-height:1.2}
+.inspect .id{font-size:11.5px;color:var(--dim);font-family:var(--mono)}
+.inspect dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0;font-size:12.5px}
+.inspect dt{color:var(--faint)}
+.inspect dd{margin:0;font-family:var(--mono);font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+.bar{height:5px;border-radius:3px;background:var(--rule);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--lume)}
+.inspect .row{display:flex;gap:8px}
+.inspect .row button{flex:1;background:var(--rule);border:1px solid var(--rule2);border-radius:7px;padding:5px 8px;font-size:12.5px;cursor:pointer}
+.inspect .row button:hover{background:var(--rule2)}
+.inspect .dead{color:var(--coral);font-size:12.5px}
+.brain{margin:0;display:flex;flex-direction:column;gap:4px}
+.brain canvas{width:100%;height:auto;aspect-ratio:8/5;background:var(--sea);border-radius:8px;display:block}
+.brain figcaption{font-size:11.5px;color:var(--dim)}
+.chron li.catastrophe p{color:var(--coral);font-family:var(--serif);font-size:15px}
+.chron li.stage p{font-family:var(--serif);font-size:15px;color:var(--ink)}
+.chron li.plague p{color:var(--dim)}
+
+/* species list */
+.species{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.species li{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;align-items:center;padding:5px 6px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+.species li:hover{background:var(--panel)}
+.species li[aria-pressed="true"]{background:var(--panel);border-color:var(--rule2)}
+.species canvas{width:40px;height:40px;border-radius:7px;background:var(--sea)}
+.species .nm{font-family:var(--serif);font-style:italic;font-size:14px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.species .tr{font-size:11.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.species .n{font-family:var(--mono);font-size:13px;text-align:right;font-variant-numeric:tabular-nums}
+.species .n small{display:block;color:var(--faint);font-size:10.5px}
+.empty{color:var(--faint);font-size:12.5px;margin:0}
+
+/* vitals */
+.vitals{display:flex;flex-direction:column;gap:6px}
+.vital{display:grid;grid-template-columns:96px minmax(0,1fr) 70px;gap:10px;align-items:center}
+.vital span{font-size:12px;color:var(--dim)}
+.vital canvas{width:100%;height:26px;display:block}
+.vital b{font-family:var(--mono);font-weight:400;font-size:12.5px;text-align:right;font-variant-numeric:tabular-nums}
+
+/* tree */
+#tree{width:100%;height:210px;display:block;background:var(--panel);border-radius:10px;border:1px solid var(--rule)}
+
+/* chronicle */
+.chron{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.chron li{display:grid;grid-template-columns:62px 10px minmax(0,1fr);gap:8px;padding:6px 0;border-top:1px solid var(--rule);font-size:13px;line-height:1.4}
+.chron li:first-child{border-top:0}
+.chron time{font-family:var(--mono);font-size:11.5px;color:var(--faint);padding-top:2px;font-variant-numeric:tabular-nums}
+.chron .dot{width:7px;height:7px;border-radius:50%;margin-top:6px;background:var(--faint)}
+.chron li.era{padding:10px 0 8px}
+.chron li.away p{font-family:var(--serif);font-size:15px;color:var(--ink)}
+.chron li.era p{font-family:var(--serif);font-size:15px;color:var(--lume)}
+.chron li.milestone p{color:var(--ink)}
+.chron li.extinct p,.chron li.climate p{color:var(--dim)}
+.chron p{margin:0}
+
+@media (max-width: 880px){
+  html,body{height:auto}
+  .app{height:auto;display:flex;flex-direction:column}
+  main{display:flex;flex-direction:column}
+  .stage{flex:none;aspect-ratio:11/7;width:100%}
+  .inspect{position:static;width:100%;max-width:none;margin-top:10px;backdrop-filter:none}
+  .inspect dl{grid-template-columns:auto 1fr auto 1fr}
+  .chron{max-height:440px;overflow-y:auto}
+  .hud{left:8px;bottom:8px;gap:6px}
+  .pill button{padding:4px 9px}
+  aside{overflow:visible;padding-right:0}
+  .hint{display:none}
+  .clock b{font-size:24px}
+}
+@media (max-width: 420px){
+  .inspect dl{grid-template-columns:auto 1fr}
+}
+</style>
+
+<div class="app">
+  <header>
+    <div class="brand">
+      <h1>Genesis Pool</h1>
+      <p id="worldline">An unguided world. Nothing here is scripted.</p>
+    </div>
+    <div class="clock" aria-live="off"><b id="clock">0.0</b><span id="clockUnit">million years</span></div>
+    <dl class="stats">
+      <div><dt>Era</dt><dd class="era" id="era">Primordial Soup</dd></div>
+      <div><dt>Organisms</dt><dd id="sPop">0</dd></div>
+      <div><dt>Species</dt><dd id="sSpc">0</dd></div>
+      <div><dt>Oxygen</dt><dd id="sOxy">0%</dd></div>
+      <div><dt>Generations</dt><dd id="sGen">0</dd></div>
+      <div><dt>Mean sea temp</dt><dd id="sTemp">0</dd></div>
+    </dl>
+  </header>
+
+  <main>
+    <div class="stage-wrap">
+    <div class="stage" id="stage">
+      <canvas id="world" aria-label="Simulated sea. Click an organism to inspect it."></canvas>
+      <div class="hud">
+        <div class="pill"><button id="play" class="go" type="button">Pause</button></div>
+        <div class="pill" id="speeds" role="group" aria-label="Pace"></div>
+        <div class="pill"><button id="reset" type="button">New world</button></div>
+      </div>
+      <div class="hint">Click any organism to inspect it</div>
+      <div class="catch" id="catch" hidden><p>The sea kept evolving while you were away</p><div class="bar"><i id="catchBar" style="width:0%"></i></div><small id="catchNote">Catching up</small></div>
+    </div>
+      <div class="inspect" id="inspect" hidden>
+        <div class="top">
+          <canvas id="inspCv" width="88" height="88"></canvas>
+          <div><h3 id="iName"></h3><div class="id" id="iId"></div></div>
+        </div>
+        <div class="dead" id="iDead" hidden>This individual has died.</div>
+        <div><div class="bar"><i id="iEnergy"></i></div></div>
+        <dl id="iStats"></dl>
+        <figure class="brain"><canvas id="brainCv" width="480" height="300"></canvas><figcaption id="brainCap">Nervous system</figcaption></figure>
+        <div class="row"><button id="iFollow" type="button">Follow</button><button id="iClose" type="button">Close</button></div>
+      </div>
+    </div>
+
+    <aside>
+      <section>
+        <div class="sec-head"><h2>Living species</h2><small id="spNote">largest first</small></div>
+        <ul class="species" id="species"></ul>
+      </section>
+      <section>
+        <div class="sec-head"><h2>Vital signs</h2><small>averages across all animals</small></div>
+        <div class="vitals" id="vitals"></div>
+      </section>
+      <section>
+        <div class="sec-head"><h2>Tree of life</h2><small>time runs left to right</small></div>
+        <canvas id="tree"></canvas>
+      </section>
+      <section>
+        <div class="sec-head"><h2>Chronicle</h2><small>newest first</small></div>
+        <ol class="chron" id="chron"></ol>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<script>
+(function (root) {
+'use strict';
+const W = 1100, H = 700, CELL = 70, TC = 20;
+const GW = Math.ceil(W / CELL), GH = Math.ceil(H / CELL);
+const TW = Math.ceil(W / TC), TH = Math.ceil(H / TC);
+const MAXC = 600, MAXP = 1400, MAXMEAT = 400, K = 0.07;
+const YPT = 10000; // years per tick
+const TAU = Math.PI * 2;
+
+/* ---------- genome layout ---------- */
+const GENES = { size: [0.4, 5], speed: [0.15, 3], sense: [0, 1], diet: [0, 1], armor: [0, 1], tpref: [-1.2, 1.2], litter: [0, 1], terr: [0, 1] };
+const GK = Object.keys(GENES);
+const DWT = { size: 1, speed: 1, sense: 1, diet: 1.5, armor: 1, tpref: 0.8, litter: 0.5, terr: 1.2 };
+const PGENES = { grow: [0.1, 1.5], tough: [0, 1], spread: [0, 1], tpref: [-1.2, 1.2], landTol: [0, 1] };
+const PK = Object.keys(PGENES);
+const SPECIATE = 0.2;
+
+// brain: 14 sensors -> 6 hidden (tanh) -> 2 motor outputs, plus direct sensor->motor links
+const NI = 14, NH = 6, NO = 2;
+const O1 = 0, O2 = NI * NH, O3 = O2 + NH * NO, NB = O3 + NI * NO;
+const IN_LABELS = ['bias', 'food dir', 'food near', 'prey dir', 'prey near', 'threat dir', 'threat near', 'kin dir', 'kin near', 'energy', 'comfort dir', 'bad ground', 'rhythm', 'noise'];
+function seedBrain() {
+  const b = new Array(NB).fill(0);
+  const d = (i, k, v) => { b[O3 + i * NO + k] = v; };
+  // turning instincts
+  d(1, 0, 2.5); d(3, 0, 3.0); d(5, 0, -3.0); d(7, 0, 0.3); d(10, 0, 0.8); d(11, 0, 1.6); d(13, 0, 0.8);
+  // thrust instincts
+  d(0, 1, 0.3); d(6, 1, 2.0); d(4, 1, 1.0); d(2, 1, -0.2); d(11, 1, -0.6);
+  return b;
+}
+const PROTO = { size: 0.6, speed: 0.35, sense: 0.08, diet: 0.02, armor: 0, tpref: 0, litter: 0.2, terr: 0 };
+const PPROTO = { grow: 0.6, tough: 0, spread: 0.4, tpref: 0, landTol: 0 };
+
+/* ---------- naming ---------- */
+const GENUS_A = ['Proto', 'Lumi', 'Cteno', 'Vorti', 'Plani', 'Echino', 'Thalasso', 'Nemato', 'Cyano', 'Aulo', 'Pelago', 'Rhizo', 'Halo', 'Spiro', 'Litho', 'Bentho', 'Placo', 'Trocho', 'Acantho', 'Glauco', 'Chloro', 'Xeno', 'Myxo', 'Hydro', 'Coelo', 'Pyro', 'Cryo', 'Tricho', 'Anomalo', 'Opabi', 'Terra', 'Psammo', 'Ichno', 'Neuro'];
+const GENUS_B = ['cystis', 'phora', 'zoon', 'cella', 'morpha', 'nema', 'plax', 'coccus', 'ina', 'ella', 'opsis', 'cyon', 'ula', 'ites', 'aster', 'thrix', 'poda', 'soma', 'dendron', 'caris', 'pes', 'saurus'];
+const EPI = {
+  eyes: ['oculata', 'videns', 'lucens', 'argus', 'vigilans'], fast: ['velox', 'celeris', 'natans', 'rapida', 'fugax'],
+  big: ['magna', 'gigantea', 'robusta', 'major', 'grandis'], small: ['minima', 'parva', 'pusilla', 'nana', 'minuta'],
+  pred: ['vorax', 'rapax', 'ferox', 'edax', 'venatrix'], armor: ['armata', 'spinosa', 'horrida', 'echinata', 'loricata'],
+  warm: ['thermophila', 'calida', 'aestiva', 'tepida'], cold: ['cryophila', 'glacialis', 'hiemalis', 'frigida', 'borealis'],
+  brood: ['fecunda', 'prolifera', 'multipara', 'fertilis'], graze: ['pascens', 'herbivora', 'mitis', 'placida'],
+  land: ['terrestris', 'ambulans', 'pedata', 'arenicola', 'litoralis'], sea: ['aquatica', 'marina', 'pelagica', 'undosa'],
+  brain: ['callida', 'astuta', 'sagax', 'prudens', 'cogitans'], plain: ['vulgaris', 'simplex', 'communis', 'errans', 'vagans']
+};
+const PHRASE = {
+  eyes: 'with sharper senses', fast: 'built for speed', big: 'with a larger body', small: 'with a smaller, cheaper body',
+  pred: 'turning toward predation', armor: 'growing defensive spines', warm: 'adapted to warmer water', cold: 'adapted to colder water',
+  brood: 'producing larger broods', graze: 'returning to grazing', land: 'moving onto land', sea: 'returning to the water',
+  brain: 'with a more elaborate nervous system', plain: 'drifting apart genetically'
+};
+
+const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+function mulberry(seed) { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function wrapA(a) { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; }
+function links(b) { let n = 0; for (let i = 0; i < NB; i++) if (b[i] !== 0) n++; return n; }
+function hiddenUsed(b) {
+  let n = 0;
+  for (let j = 0; j < NH; j++) {
+    let a = false, o = false;
+    for (let i = 0; i < NI; i++) if (b[O1 + i * NH + j] !== 0) { a = true; break; }
+    for (let k = 0; k < NO; k++) if (b[O2 + j * NO + k] !== 0) { o = true; break; }
+    if (a && o) n++;
+  }
+  return n;
+}
+const SEED_LINKS = links(seedBrain());
+
+class Sim {
+  constructor(seed, snap) {
+    this.seed = seed >>> 0; this._s = this.seed;
+    this.rng = () => { let a = this._s | 0; a = a + 0x6D2B79F5 | 0; this._s = a; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    this.t = 0; this.nid = 1; this.spid = 1;
+    this.creatures = []; this.plants = []; this.meat = [];
+    this.cgrid = []; this.pgrid = []; this.mgrid = [];
+    for (let i = 0; i < GW * GH; i++) { this.cgrid.push([]); this.pgrid.push([]); this.mgrid.push([]); }
+    this.active = new Set(); this.recognized = []; this.names = new Set(); this.genera = new Set();
+    this.events = []; this.history = []; this.milestones = {};
+    this.climate = 0; this.climateTarget = 0; this.nextClimate = 5000; this.climateHold = 0;
+    this.maxGen = 0; this.era = 'Primordial Soup'; this.eraRank = -1;
+    this.vents = [];
+    this.cumO = 0; this.oxygen = 0.03; this.oxyDip = 0;
+    this.nextCatastrophe = 0; this.flash = null; this.terrainVer = 0;
+    this.fert = new Float32Array(TW * TH);
+    this.buildTerrain();
+    this.seaLevel = this.seaStart; this.seaFalling = false;
+    if (snap) { this.restore(snap); this.updateFert(); return; }
+    const r = this.rng;
+    for (let i = 0; i < 4; i++) {
+      const a = r() * TAU;
+      this.vents.push({ x: 120 + r() * (W - 240), y: 120 + r() * (H - 240), vx: Math.cos(a) * 0.02, vy: Math.sin(a) * 0.02, p: 0.6 + r() * 0.8, ph: r() * TAU });
+    }
+    this.nextCatastrophe = 45000 + Math.floor(r() * 40000);
+    this.updateFert();
+    for (let i = 0; i < 450; i++) {
+      const v = this.vents[i % 4];
+      const x = clamp(v.x + this.gauss() * 90, 5, W - 5), y = clamp(v.y + this.gauss() * 90, 5, H - 5);
+      const g = this.pmutate(PPROTO); g.tpref = clamp(this.tempAt(y) + this.gauss() * 0.1, -1.2, 1.2);
+      this.plants.push(this.makePlant(g, x, y, 4 + r() * 4));
+    }
+    this.genesis(40, 'The first self-copying cells appear near the warm vents, grazing on mats of simple algae.');
+  }
+
+  /* ---------- terrain ---------- */
+  buildTerrain() {
+    const r = mulberry(this.seed ^ 0x9E3779B9);
+    const h = new Float32Array(TW * TH);
+    const octs = [[6, 4, 1], [12, 8, 0.5], [24, 16, 0.25]];
+    for (const [gx, gy, amp] of octs) {
+      const grid = []; for (let i = 0; i < (gx + 1) * (gy + 1); i++) grid.push(r());
+      for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) {
+        const fx = x / TW * gx, fy = y / TH * gy, ix = Math.floor(fx), iy = Math.floor(fy);
+        const tx = fx - ix, ty = fy - iy, sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+        const g = (a, b) => grid[b * (gx + 1) + a];
+        const v = g(ix, iy) * (1 - sx) * (1 - sy) + g(ix + 1, iy) * sx * (1 - sy) + g(ix, iy + 1) * (1 - sx) * sy + g(ix + 1, iy + 1) * sx * sy;
+        h[y * TW + x] += v * amp;
+      }
+    }
+    let lo = Infinity, hi = -Infinity;
+    for (const v of h) { if (v < lo) lo = v; if (v > hi) hi = v; }
+    for (let i = 0; i < h.length; i++) h[i] = (h[i] - lo) / (hi - lo);
+    this.height = h;
+    const sorted = Array.from(h).sort((a, b) => a - b);
+    this.seaFinal = sorted[Math.floor(sorted.length * 0.7)];
+    this.seaStart = 1.12;
+  }
+  tcell(x, y) { return clamp((y / TC) | 0, 0, TH - 1) * TW + clamp((x / TC) | 0, 0, TW - 1); }
+  isLand(x, y) { return this.height[this.tcell(x, y)] > this.seaLevel; }
+  landFrac() { let n = 0; for (const v of this.height) if (v > this.seaLevel) n++; return n / this.height.length; }
+  updateFert() {
+    const sl = this.seaLevel;
+    for (let ty = 0; ty < TH; ty++) for (let tx = 0; tx < TW; tx++) {
+      const i = ty * TW + tx, x = (tx + 0.5) * TC, y = (ty + 0.5) * TC, h = this.height[i];
+      let f = 0.18;
+      for (const v of this.vents) { const dx = x - v.x, dy = y - v.y; f += v.p * Math.exp(-(dx * dx + dy * dy) / (2 * 110 * 110)); }
+      if (h > sl) f = 0.45 + 0.65 * Math.min(1, (h - sl) / 0.06);
+      else { const depth = sl - h; if (depth < 0.12) f += 0.7 * (1 - depth / 0.12); }
+      this.fert[i] = f;
+    }
+  }
+
+  gauss() { let u = 0; while (u === 0) u = this.rng(); const v = this.rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
+  tempAt(y) { return this.climate + 0.9 * (y / H * 2 - 1); }
+
+  genesis(n, text) {
+    const sp = this.makeSpecies(null, Object.assign({}, PROTO), seedBrain());
+    sp.hue = this.recognized.length ? this.rng() * 360 : 28;
+    for (let i = 0; i < n; i++) {
+      const v = this.vents[i % this.vents.length];
+      const g = this.mutate(Object.assign({ B: seedBrain() }, PROTO));
+      g.tpref = clamp(this.tempAt(v.y) + this.gauss() * 0.1, -1.2, 1.2);
+      let x = clamp(v.x + this.gauss() * 60, 10, W - 10), y = clamp(v.y + this.gauss() * 60, 10, H - 10);
+      if (this.isLand(x, y)) { x = v.x; y = v.y; }
+      this.creatures.push(this.makeCreature(g, x, y, sp, 45, 0));
+    }
+    this.log(text, 'genesis');
+  }
+
+  log(text, kind, sp) {
+    this.events.push({ t: this.t, text, kind, hue: sp ? sp.hue : null });
+    if (this.events.length > 140) this.events.shift();
+  }
+
+  makeSpecies(parent, g, B) {
+    const f = {}; for (const k of GK) f[k] = g[k];
+    const sp = { id: this.spid++, parent, founder: f, fB: B.slice(), born: this.t, extinct: null, pop: 0, peak: 0, recognized: false, hue: 28, name: null, genus: null, mean: Object.assign({ links: links(B) }, f), rep: null, anc: null, _n: 0, _s: {} };
+    if (parent) { const sgn = this.rng() < 0.5 ? -1 : 1; sp.hue = (parent.hue + sgn * (22 + this.rng() * 50) + 360) % 360; }
+    this.active.add(sp);
+    return sp;
+  }
+
+  makeCreature(g, x, y, sp, e, gen) {
+    const c = { id: this.nid++, x, y, a: this.rng() * TAU, g, sp, e, age: 0, gen, dead: false, cool: 0, ecool: 0, v: 0, ph: this.rng() * TAU, ate: 0, kills: 0, turnOut: 0 };
+    this.derive(c);
+    c.maxAge = (900 + g.size * 450) * (0.8 + this.rng() * 0.4);
+    c.e = Math.min(e, c.cap);
+    if (gen > this.maxGen) this.maxGen = gen;
+    return c;
+  }
+  derive(c) {
+    const g = c.g;
+    c.r = 2.2 + g.size * 3;
+    c.maxV = (0.3 + g.speed * 0.85) * (1 - g.armor * 0.35) / (0.8 + g.size * 0.2);
+    c.turn = (0.2 + g.speed * 0.05) / (0.75 + g.size * 0.25);
+    c.senseR = 10 + g.sense * 140 + c.r;
+    c.cap = 40 + 60 * g.size;
+    c.mature = 100 + g.size * 90;
+    c.links = links(g.B);
+    c.upkeep = K * (0.35 + 0.14 * Math.pow(g.size, 1.2) + 0.35 * g.sense + 0.25 * g.armor + 0.3 * g.speed + 0.08 * g.litter + 0.1 * g.terr + 0.004 * c.links);
+    c.moveK = K * 0.8 * (0.4 + 0.6 * g.size);
+    c.bite = 2 + g.size * 1.2;
+    c.body = 10 * g.size;
+  }
+
+  mutate(g) {
+    const n = {};
+    for (const k of GK) {
+      const lo = GENES[k][0], hi = GENES[k][1];
+      let sd = (hi - lo) * 0.025;
+      if (this.rng() < 0.03) sd *= 5;
+      n[k] = clamp(g[k] + this.gauss() * sd, lo, hi);
+    }
+    const B = g.B.slice();
+    for (let i = 0; i < NB; i++) {
+      if (B[i] !== 0) {
+        const r = this.rng();
+        if (r < 0.12) B[i] = clamp(B[i] + this.gauss() * 0.25, -4, 4);
+        else if (r < 0.124) B[i] = 0;
+      } else if (this.rng() < 0.003) B[i] = this.gauss() * 0.8;
+    }
+    n.B = B;
+    return n;
+  }
+  pmutate(g) {
+    const n = {};
+    for (const k of PK) { const lo = PGENES[k][0], hi = PGENES[k][1]; let sd = (hi - lo) * 0.03; if (this.rng() < 0.03) sd *= 5; n[k] = clamp(g[k] + this.gauss() * sd, lo, hi); }
+    return n;
+  }
+  makePlant(g, x, y, e) { return { x, y, g, e, age: 0, maxAge: 1800 + this.rng() * 2200, dead: false }; }
+
+  dist(a, aB, b, bB) {
+    let s = 0;
+    for (const k of GK) { const r = GENES[k][1] - GENES[k][0]; const d = (a[k] - b[k]) / r; s += DWT[k] * d * d; }
+    let m = 0; for (let i = 0; i < NB; i++) m += Math.abs(aB[i] - bB[i]);
+    m /= NB;
+    s += 0.08 * (m / 0.15) * (m / 0.15);
+    return Math.sqrt(s);
+  }
+
+  /* ---------- main step ---------- */
+  step() {
+    const rng = this.rng;
+    this.t++;
+    // climate
+    if (this.t >= this.nextClimate && this.climateHold <= 0) {
+      const old = this.climateTarget;
+      let tgt = (rng() * 2 - 1) * 0.75;
+      if (Math.abs(tgt - old) < 0.3) tgt = clamp(old + (tgt >= old ? 0.45 : -0.45), -0.75, 0.75);
+      this.climateTarget = tgt;
+      this.nextClimate = this.t + 4000 + Math.floor(rng() * 6000);
+      const d = tgt - old;
+      if (Math.abs(d) > 0.25) this.log(d > 0 ? 'The oceans begin to warm. Cold-adapted life gets squeezed toward the north.' : 'A long cooling begins. Warm-adapted life retreats south.', 'climate');
+    }
+    if (this.climateHold > 0) this.climateHold--;
+    this.climate += (this.climateTarget - this.climate) * (this.climateHold > 0 ? 0.0015 : 0.0005);
+    // vents
+    for (const v of this.vents) {
+      v.x += v.vx; v.y += v.vy;
+      if (v.x < 90 || v.x > W - 90) v.vx *= -1;
+      if (v.y < 90 || v.y > H - 90) v.vy *= -1;
+      if (rng() < 0.0008) { const a = rng() * TAU; v.vx = Math.cos(a) * 0.02; v.vy = Math.sin(a) * 0.02; }
+      v.ph += 0.0004; v.p = 0.9 + 0.6 * Math.sin(v.ph);
+    }
+    // oxygen and sea level
+    if (this.oxyDip > 0) this.oxyDip = Math.max(0, this.oxyDip - 0.00002);
+    this.oxygen = Math.max(0.03, 1 - Math.exp(-this.cumO / 1.5e6) - this.oxyDip);
+    if (!this.seaFalling && this.oxygen > 0.55 && this.t > 20000) {
+      this.seaFalling = true;
+      this.log('The seas begin to recede. Shallow, sunlit flats appear, and soon the first dry land.', 'stage');
+    }
+    if (this.seaFalling && this.seaLevel > this.seaFinal) {
+      this.seaLevel = Math.max(this.seaFinal, this.seaLevel - 0.00003);
+      if (this.t % 100 === 0) this.terrainVer++;
+    }
+    if (this.t % 50 === 0) this.updateFert();
+    // catastrophes
+    if (this.t >= this.nextCatastrophe) this.catastrophe();
+    if (this.flash && this.t - this.flash.t > 400) this.flash = null;
+    // grids
+    this.plants = this.plants.filter(p => !p.dead);
+    const tt = this.t;
+    this.meat = this.meat.filter(m => !m.dead && tt - m.b < 700);
+    for (let i = 0; i < this.cgrid.length; i++) { this.cgrid[i].length = 0; this.pgrid[i].length = 0; this.mgrid[i].length = 0; }
+    for (const p of this.plants) this.pgrid[this.cellOf(p.x, p.y)].push(p);
+    for (const m of this.meat) this.mgrid[this.cellOf(m.x, m.y)].push(m);
+    for (const c of this.creatures) this.cgrid[this.cellOf(c.x, c.y)].push(c);
+    // plants
+    const seeds = [];
+    const plen = this.plants.length;
+    for (let i = 0; i < plen; i++) { const p = this.plants[i]; if (!p.dead) this.growPlant(p, seeds, plen); }
+    for (const s of seeds) this.plants.push(s);
+    // creatures
+    const births = [];
+    const cs = this.creatures;
+    for (let i = 0; i < cs.length; i++) { const c = cs[i]; if (!c.dead) this.act(c, births); }
+    this.creatures = cs.filter(c => !c.dead);
+    for (const b of births) this.creatures.push(b);
+    if (this.t % 30 === 0) this.census();
+    if (this.plants.length < 30) this.reseedPlants();
+    if (this.creatures.length === 0) {
+      this.genesis(30, 'All animal life has vanished. After a long silence, new cells assemble near the vents.');
+    }
+  }
+  cellOf(x, y) { return clamp((y / CELL) | 0, 0, GH - 1) * GW + clamp((x / CELL) | 0, 0, GW - 1); }
+
+  reseedPlants() {
+    for (let i = 0; i < 60; i++) {
+      const v = this.vents[i % this.vents.length];
+      const x = clamp(v.x + this.gauss() * 80, 5, W - 5), y = clamp(v.y + this.gauss() * 80, 5, H - 5);
+      if (this.isLand(x, y)) continue;
+      const g = this.pmutate(PPROTO); g.tpref = clamp(this.tempAt(y), -1.2, 1.2);
+      this.plants.push(this.makePlant(g, x, y, 5));
+    }
+  }
+
+  growPlant(p, seeds, plen) {
+    const g = p.g;
+    p.age++;
+    const ti = this.tcell(p.x, p.y), land = this.height[ti] > this.seaLevel;
+    const crowd = this.pgrid[this.cellOf(p.x, p.y)].length;
+    const td = g.tpref - this.tempAt(p.y);
+    const tf = Math.max(0, 1 - td * td * 1.5);
+    const hab = land ? 0.15 + 0.85 * g.landTol : 1 - 0.5 * g.landTol;
+    const gross = 0.12 * g.grow * this.fert[ti] * tf * hab * (1 - 0.45 * g.tough) / (1 + crowd / 20);
+    this.cumO += gross;
+    p.e += gross - (0.004 + 0.013 * g.grow + 0.012 * g.tough + 0.004 * g.spread + 0.004 * g.landTol);
+    if (p.e > 14) p.e = 14;
+    if (p.e <= 0 || p.age > p.maxAge) { p.dead = true; return; }
+    if (p.e > 9 && p.age > 60 && plen + seeds.length < MAXP) {
+      p.e -= 4.5;
+      const d = 6 + g.spread * 60 + Math.abs(this.gauss()) * 6, a = this.rng() * TAU;
+      const x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d;
+      if (x < 3 || x > W - 3 || y < 3 || y > H - 3) return;
+      seeds.push(this.makePlant(this.pmutate(g), x, y, 3));
+    }
+  }
+
+  catastrophe() {
+    const r = this.rng;
+    this.nextCatastrophe = this.t + 40000 + Math.floor(r() * 50000);
+    const before = this.creatures.length;
+    if (before < 60) { this.nextCatastrophe = this.t + 8000; return; }
+    const kind = r() < 0.55 ? 'asteroid' : 'volcanic';
+    let killed = 0;
+    if (kind === 'asteroid') {
+      const x = 150 + r() * (W - 300), y = 150 + r() * (H - 300), R = 200;
+      this.flash = { x, y, t: this.t, R };
+      for (const c of this.creatures) {
+        const d = Math.hypot(c.x - x, c.y - y);
+        const pk = d < R ? 0.95 : 0.2 + 0.08 * c.g.size;
+        if (r() < pk && before - killed > 40) { c.dead = true; killed++; }
+      }
+      for (const p of this.plants) { const d = Math.hypot(p.x - x, p.y - y); if (d < R || r() < 0.4) p.dead = true; }
+      this.climateTarget = -0.6; this.climateHold = 3000; this.nextClimate = this.t + 6000;
+    } else {
+      for (const c of this.creatures) {
+        const pk = 0.15 + 0.1 * c.g.size + (c.g.tpref > 0.3 ? 0.2 : 0);
+        if (r() < pk && before - killed > 40) { c.dead = true; killed++; }
+      }
+      for (const p of this.plants) if (r() < 0.3) p.dead = true;
+      this.oxyDip = Math.min(0.3, this.oxygen * 0.35);
+      this.climateTarget = -0.5; this.climateHold = 4000; this.nextClimate = this.t + 8000;
+    }
+    this.creatures = this.creatures.filter(c => !c.dead);
+    const pct = Math.round(killed / before * 100);
+    this.catastrophes = (this.catastrophes || 0) + 1;
+    this.log(kind === 'asteroid'
+      ? `Mass extinction: an asteroid strikes the sea. About ${pct}% of animal life dies, and a long impact winter follows.`
+      : `Mass extinction: massive volcanic eruptions choke the skies. About ${pct}% of animal life dies and oxygen levels fall.`, 'catastrophe');
+  }
+
+  act(c, births) {
+    const g = c.g, rng = this.rng;
+    c.age++; if (c.cool > 0) c.cool--; if (c.ecool > 0) c.ecool--;
+    c.ph += 0.15 + c.v * 0.25;
+    const R = c.senseR, R2 = R * R;
+    const x0 = clamp(((c.x - R) / CELL) | 0, 0, GW - 1), x1 = clamp(((c.x + R) / CELL) | 0, 0, GW - 1);
+    const y0 = clamp(((c.y - R) / CELL) | 0, 0, GH - 1), y1 = clamp(((c.y + R) / CELL) | 0, 0, GH - 1);
+    let bf = null, bfd = R2, bfs = Infinity, bfMeat = false;
+    let prey = null, bdp = R2, thr = null, bdt = R2;
+    let kin = null, bdk = R2, sx = 0, sy = 0;
+    const canHunt = g.diet > 0.22 && c.e < c.cap * 0.8 && c.cool <= 0;
+    const pEff = 1 - Math.pow(g.diet, 1.5), mEff = 0.2 + 0.8 * Math.pow(g.diet, 0.8);
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+      const idx = cy * GW + cx;
+      if (pEff > 0.08) {
+        const pl = this.pgrid[idx];
+        for (let j = 0; j < pl.length; j++) {
+          const p = pl[j]; if (p.dead) continue;
+          const dx = p.x - c.x, dy = p.y - c.y, d2 = dx * dx + dy * dy;
+          if (d2 > R2) continue;
+          const gain = Math.min(p.e - 1, c.bite) * pEff * (1 - p.g.tough * 0.5);
+          if (gain < 0.3) continue;
+          const sc = d2 / (gain * gain);
+          if (sc < bfs) { bfs = sc; bfd = d2; bf = p; bfMeat = false; }
+        }
+      }
+      const ml = this.mgrid[idx];
+      for (let j = 0; j < ml.length; j++) {
+        const m = ml[j]; if (m.dead) continue;
+        const dx = m.x - c.x, dy = m.y - c.y, d2 = dx * dx + dy * dy;
+        if (d2 > R2) continue;
+        const gain = m.e * mEff;
+        if (gain < 0.4) continue;
+        const sc = d2 / (gain * gain);
+        if (sc < bfs) { bfs = sc; bfd = d2; bf = m; bfMeat = true; }
+      }
+      const cl = this.cgrid[idx];
+      for (let j = 0; j < cl.length; j++) {
+        const o = cl[j]; if (o === c || o.dead) continue;
+        const dx = o.x - c.x, dy = o.y - c.y, d2 = dx * dx + dy * dy;
+        if (d2 > R2) continue;
+        const rr = c.r + o.r;
+        if (d2 < rr * rr && d2 > 0.0001) { const d = Math.sqrt(d2); sx -= dx / d; sy -= dy / d; }
+        if (o.sp === c.sp) { if (d2 < bdk) { bdk = d2; kin = o; } continue; }
+        if (o.g.diet > 0.22 && c.r < o.r * 1.2 && d2 < bdt) { bdt = d2; thr = o; }
+        if (canHunt && o.r < c.r * 1.2 && d2 < bdp) { bdp = d2; prey = o; }
+      }
+    }
+    // sensors
+    const I = this._in || (this._in = new Float32Array(NI));
+    const rel = (tx, ty) => wrapA(Math.atan2(ty - c.y, tx - c.x) - c.a) / Math.PI;
+    I[0] = 1;
+    if (bf) { const p = 1 - Math.sqrt(bfd) / R; I[1] = rel(bf.x, bf.y) * (0.3 + 0.7 * p); I[2] = p; } else { I[1] = 0; I[2] = 0; }
+    if (prey) { const p = 1 - Math.sqrt(bdp) / R; I[3] = rel(prey.x, prey.y) * (0.3 + 0.7 * p); I[4] = p; } else { I[3] = 0; I[4] = 0; }
+    if (thr) { const p = 1 - Math.sqrt(bdt) / R; I[5] = rel(thr.x, thr.y) * (0.3 + 0.7 * p); I[6] = p; } else { I[5] = 0; I[6] = 0; }
+    if (kin) { const p = 1 - Math.sqrt(bdk) / R; I[7] = rel(kin.x, kin.y); I[8] = p; } else { I[7] = 0; I[8] = 0; }
+    I[9] = c.e / c.cap * 2 - 1;
+    const T = this.tempAt(c.y), td = g.tpref - T;
+    I[10] = wrapA((td > 0 ? Math.PI / 2 : -Math.PI / 2) - c.a) / Math.PI * Math.min(1, Math.abs(td) * 1.5);
+    const hereLand = this.isLand(c.x, c.y);
+    const ax = c.x + Math.cos(c.a) * (c.r + 16), ay = c.y + Math.sin(c.a) * (c.r + 16);
+    if (ax < 4 || ax > W - 4 || ay < 4 || ay > H - 4) I[11] = 0;
+    else I[11] = Math.max(0, this.isLand(ax, ay) ? (1 - 2.5 * g.terr) : (2.5 * g.terr - 1.5));
+    I[12] = Math.sin(c.age * 0.08 + c.id);
+    I[13] = this.gauss() * 0.5;
+    // brain
+    const B = g.B;
+    let o0 = 0, o1 = 0;
+    for (let j = 0; j < NH; j++) {
+      const w20 = B[O2 + j * NO], w21 = B[O2 + j * NO + 1];
+      if (w20 === 0 && w21 === 0) continue;
+      let s = 0; for (let i = 0; i < NI; i++) { const w = B[O1 + i * NH + j]; if (w !== 0) s += I[i] * w; }
+      if (s === 0) continue;
+      const h = Math.tanh(s); o0 += h * w20; o1 += h * w21;
+    }
+    for (let i = 0; i < NI; i++) { const w0 = B[O3 + i * NO], w1 = B[O3 + i * NO + 1]; if (w0 !== 0) o0 += I[i] * w0; if (w1 !== 0) o1 += I[i] * w1; }
+    const turnOut = Math.tanh(o0), thrust = 1 / (1 + Math.exp(-o1 * 2));
+    c.turnOut = turnOut; c.thrust = thrust;
+    c.a = wrapA(c.a + turnOut * c.turn);
+    const landF = hereLand ? 0.3 + 0.7 * g.terr : 1 - 0.3 * g.terr * g.terr;
+    let want = c.maxV * (0.12 + 0.88 * thrust) * landF;
+    if (prey && bdp < (c.r * 4) * (c.r * 4)) want *= 1.3;
+    c.v += (want - c.v) * 0.2;
+    c.x += Math.cos(c.a) * c.v + sx * 0.4; c.y += Math.sin(c.a) * c.v + sy * 0.4;
+    if (c.x < c.r) { c.x = c.r; c.a = Math.PI - c.a; } else if (c.x > W - c.r) { c.x = W - c.r; c.a = Math.PI - c.a; }
+    if (c.y < c.r) { c.y = c.r; c.a = -c.a; } else if (c.y > H - c.r) { c.y = H - c.r; c.a = -c.a; }
+    // feeding
+    if (bf && !bf.dead && c.ecool <= 0) {
+      const ex = bf.x - c.x, ey = bf.y - c.y, rr = c.r + 3;
+      if (ex * ex + ey * ey < rr * rr) {
+        if (bfMeat) { bf.dead = true; c.e += bf.e * mEff; }
+        else {
+          const take = Math.max(0, Math.min(bf.e - 1, c.bite));
+          bf.e -= take;
+          c.e += take * pEff * (1 - bf.g.tough * 0.5);
+        }
+        c.ate = 6; c.ecool = 4;
+      }
+    }
+    if (prey && !prey.dead && c.cool <= 0) {
+      const ex = prey.x - c.x, ey = prey.y - c.y, rr = c.r + prey.r + 1;
+      if (ex * ex + ey * ey < rr * rr) {
+        c.cool = 6; c.e -= 0.3;
+        const ratio = c.r / prey.r;
+        const p = clamp(1.6 * Math.pow(Math.max(0, g.diet - 0.15), 1.3) * Math.pow(Math.min(ratio, 1.8), 1.5) * (ratio > 1.5 ? Math.pow(1.5 / ratio, 4) : 1) * (1 - prey.g.armor * 0.8), 0, 0.85);
+        if (rng() < p) {
+          prey.dead = true;
+          c.e += (Math.max(0, prey.e) * 0.9 + prey.body) * mEff;
+          c.ate = 10; c.kills++; c.cool = 45;
+        }
+      }
+    }
+    if (c.ate > 0) c.ate--;
+    // metabolism
+    const cap = 0.8 + 4.2 * Math.pow(this.oxygen, 1.5), over = Math.max(0, g.size - cap);
+    let drain = c.upkeep + c.moveK * c.v * c.v + K * 1.1 * td * td * (0.6 + 0.2 * g.size) + K * 6 * over * over;
+    drain += hereLand ? K * 1.2 * (1 - g.terr) * (1 - g.terr) : K * 1.0 * g.terr * g.terr;
+    c.e -= drain;
+    if (c.e <= 0 || c.age > c.maxAge) {
+      c.dead = true;
+      const n = Math.min(3, Math.max(1, Math.round(g.size)));
+      const each = (Math.max(0, c.e) * 0.5 + c.body * 0.8) / n;
+      if (each > 1) for (let i = 0; i < n && this.meat.length < MAXMEAT; i++) this.meat.push({ x: clamp(c.x + this.gauss() * c.r, 4, W - 4), y: clamp(c.y + this.gauss() * c.r, 4, H - 4), dead: false, e: each, b: this.t });
+      return;
+    }
+    // reproduce
+    if (c.e > c.cap * 0.75 && c.age > c.mature && this.creatures.length + births.length < MAXC) {
+      const n = 1 + Math.floor(g.litter * 2.999);
+      const give = c.e * 0.5; c.e -= give;
+      const each = give * 0.9 / n;
+      for (let i = 0; i < n; i++) {
+        const cg = this.mutate(g);
+        let sp = c.sp;
+        if (this.dist(cg, cg.B, sp.founder, sp.fB) > SPECIATE) sp = this.makeSpecies(sp, cg, cg.B);
+        const ce = each - 10 * cg.size;
+        if (ce < 8) continue;
+        births.push(this.makeCreature(cg, clamp(c.x + this.gauss() * 4, 3, W - 3), clamp(c.y + this.gauss() * 4, 3, H - 3), sp, ce, c.gen + 1));
+      }
+    }
+    if (c.e > c.cap) c.e = c.cap;
+  }
+
+  census() {
+    for (const sp of this.active) { sp._n = 0; sp._l = 0; for (const k of GK) sp._s[k] = 0; }
+    const tot = { size: 0, speed: 0, sense: 0, diet: 0, armor: 0, terr: 0, links: 0, hidden: 0 };
+    let onLand = 0;
+    for (const c of this.creatures) {
+      const sp = c.sp; sp._n++; sp._l += c.links;
+      for (const k of GK) sp._s[k] += c.g[k];
+      tot.size += c.g.size; tot.speed += c.g.speed; tot.sense += c.g.sense; tot.diet += c.g.diet; tot.armor += c.g.armor; tot.terr += c.g.terr; tot.links += c.links;
+      if (this.isLand(c.x, c.y)) onLand++;
+      if (!sp.rep || this.rng() < 0.05) sp.rep = c.g;
+    }
+    for (const sp of Array.from(this.active)) {
+      sp.pop = sp._n;
+      if (sp.pop === 0) {
+        sp.extinct = this.t; this.active.delete(sp);
+        if (sp.recognized && sp.peak >= 30) this.log(sp.name + ' goes extinct after ' + fmtSpan((this.t - sp.born) * YPT) + ' (peak population ' + sp.peak + ').', 'extinct', sp);
+        continue;
+      }
+      for (const k of GK) sp.mean[k] = sp._s[k] / sp._n;
+      sp.mean.links = sp._l / sp._n;
+      if (sp.pop > sp.peak) sp.peak = sp.pop;
+      if (!sp.recognized && sp.pop >= 10) this.recognize(sp);
+    }
+    // density-dependent disease keeps any one species from owning the world
+    const total = this.creatures.length;
+    for (const sp of this.active) {
+      if (sp.recognized && sp.pop > 60 && sp.pop > total * 0.6 && this.t - (sp.plague || -1e9) > 15000 && this.rng() < 0.002) {
+        sp.plague = this.t;
+        let killed = 0;
+        for (const c of this.creatures) if (c.sp === sp && this.rng() < 0.45) { c.dead = true; killed++; }
+        this.creatures = this.creatures.filter(c => !c.dead);
+        sp.pop -= killed;
+        this.log('A plague sweeps through ' + sp.name + ', the most crowded species, killing ' + killed + '.', 'plague', sp);
+      }
+    }
+    // plants summary
+    let pt = 0, pl = 0, landPlants = 0;
+    for (const p of this.plants) { pt += p.g.tough; pl += p.g.landTol; if (this.height[this.tcell(p.x, p.y)] > this.seaLevel) landPlants++; }
+    const np = this.plants.length || 1;
+    this.plantStats = { n: this.plants.length, tough: pt / np, landTol: pl / np, onLand: landPlants };
+    // milestones
+    const feats = {};
+    const hit = (k, text, sp) => { feats[k] = true; if (!this.milestones[k]) { this.milestones[k] = { t: this.t, sp: sp || null }; this.log(text, 'milestone', sp); } };
+    for (const sp of this.active) {
+      if (!sp.recognized) continue;
+      const m = sp.mean;
+      if (m.sense > 0.35) hit('eyes', 'First eyespots: ' + sp.name + ' can now sense food and danger at a distance.', sp);
+      if (m.sense > 0.7) hit('sight', 'Complex eyes evolve in ' + sp.name + '.', sp);
+      if (m.speed > 1.3) hit('swim', sp.name + ' grows flagella and becomes a fast swimmer.', sp);
+      if (m.size > 1.6) hit('multi', 'First multicellular body plan appears in ' + sp.name + '.', sp);
+      if (m.size > 3.2) hit('giant', 'Giants appear: ' + sp.name + ' dwarfs its ancestors.', sp);
+      if (m.diet > 0.55) hit('pred', 'First true predator: ' + sp.name + ' hunts other animals.', sp);
+      if (m.armor > 0.45) hit('armor', 'Defensive spines evolve in ' + sp.name + '.', sp);
+      if (m.links > SEED_LINKS + 9) hit('brain', 'A more elaborate nervous system evolves in ' + sp.name + ' (' + Math.round(m.links) + ' neural links).', sp);
+      if (m.tpref < -0.75) hit('cold', sp.name + ' colonizes the frigid northern waters.', sp);
+      if (m.tpref > 0.75) hit('warm', sp.name + ' colonizes the hot southern waters.', sp);
+      if (m.terr > 0.55 && sp.pop >= 12) hit('landanimals', 'Conquest of land: ' + sp.name + ' walks out of the sea.', sp);
+    }
+    if (this.oxygen > 0.35) hit('oxy', 'The Great Oxygenation: algae have filled the water with oxygen. Larger bodies are now possible.');
+    if (this.plantStats.onLand >= 40) hit('landplants', 'The first plants take root on dry land.');
+    if (feats.pred && feats.armor) hit('arms', 'An arms race: prey are armoring up as fast as predators can adapt.');
+    const ERA = [['eyes', 'Dawn of Sight'], ['swim', 'Age of Swimmers'], ['oxy', 'Great Oxygenation'], ['multi', 'Multicellular Bloom'], ['giant', 'Age of Giants'], ['pred', 'Age of Predators'], ['arms', 'Arms Race'], ['landplants', 'Greening of the Land'], ['landanimals', 'Conquest of Land']];
+    for (let i = ERA.length - 1; i >= 0; i--) {
+      if (!this.milestones[ERA[i][0]]) continue;
+      if (i > this.eraRank) { this.eraRank = i; this.era = ERA[i][1]; this.log('A new era begins: ' + this.era + '.', 'era'); }
+      break;
+    }
+    const n = this.creatures.length || 1;
+    let spc = 0; for (const sp of this.active) if (sp.recognized) spc++;
+    this.history.push({ t: this.t, pop: this.creatures.length, spc, size: tot.size / n, speed: tot.speed / n, sense: tot.sense / n, diet: tot.diet / n, armor: tot.armor / n, temp: this.climate, plants: this.plants.length, oxy: this.oxygen, links: tot.links / n, land: onLand / n, tough: this.plantStats.tough });
+    if (this.history.length > 600) this.history = this.history.filter((_, i) => i % 2 === 0);
+  }
+
+  recognize(sp) {
+    sp.recognized = true;
+    let a = sp.parent; while (a && !a.recognized) a = a.parent;
+    sp.anc = a;
+    const m = sp.mean, p = a ? a.mean : Object.assign({ links: SEED_LINKS }, PROTO);
+    const score = {
+      eyes: m.sense - p.sense, fast: (m.speed - p.speed) / 2.85, big: (m.size - p.size) / 4.6, small: (p.size - m.size) / 4.6,
+      pred: m.diet - p.diet, armor: m.armor - p.armor, warm: (m.tpref - p.tpref) / 2.4, cold: (p.tpref - m.tpref) / 2.4,
+      brood: m.litter - p.litter, graze: p.diet - m.diet, land: (m.terr - p.terr) * 1.3, sea: (p.terr - m.terr) * 1.2, brain: (m.links - p.links) / 20
+    };
+    const ok = { eyes: m.sense > 0.3, fast: m.speed > 1.0, big: m.size > 1.2, small: p.size > 1.0, pred: m.diet > 0.35, armor: m.armor > 0.3, warm: m.tpref > 0.3, cold: m.tpref < -0.3, brood: m.litter > 0.5, graze: p.diet > 0.3, land: m.terr > 0.35, sea: p.terr > 0.35, brain: m.links > SEED_LINKS + 5 };
+    let best = 'plain', bs = 0.04;
+    for (const k in score) if (ok[k] && score[k] > bs) { bs = score[k]; best = k; }
+    if (!a) best = 'plain';
+    let genus = a ? a.genus : null;
+    if (!a || Math.abs(m.diet - p.diet) > 0.25 || Math.abs(m.size - p.size) > 0.9 || Math.abs(m.terr - p.terr) > 0.3 || this.rng() < 0.18) genus = null;
+    const newGenus = () => {
+      for (let i = 0; i < 40; i++) {
+        const gname = GENUS_A[(this.rng() * GENUS_A.length) | 0] + GENUS_B[(this.rng() * GENUS_B.length) | 0];
+        if (!this.genera.has(gname)) { this.genera.add(gname); return gname; }
+      }
+      return 'Nova' + GENUS_B[(this.rng() * GENUS_B.length) | 0] + this.genera.size;
+    };
+    if (!a && this.recognized.length === 0) { genus = 'Protocystis'; this.genera.add(genus); }
+    if (!genus) genus = newGenus();
+    let name = null;
+    for (let tries = 0; tries < 6 && !name; tries++) {
+      const list = EPI[best].slice().sort(() => this.rng() - 0.5);
+      for (const e of list) { const nm = genus + ' ' + e; if (!this.names.has(nm)) { name = nm; break; } }
+      if (!name) genus = newGenus();
+    }
+    sp.genus = genus; sp.name = name; sp.trait = best; this.names.add(name);
+    this.recognized.push(sp);
+    if (a && best !== 'plain') this.log('New species: ' + name + ' branches from ' + a.name + ', ' + PHRASE[best] + '.', 'species', sp);
+    else if (!a && this.recognized.length === 1) this.log(name + ' establishes itself as the first true species.', 'species', sp);
+    else if (!a) this.log(name + ' emerges as a new root of life.', 'species', sp);
+  }
+
+  /* ---------- save / restore ---------- */
+  snapshot() {
+    const keep = new Set(this.recognized); for (const sp of this.active) keep.add(sp);
+    const near = sp => { let a = sp.parent; while (a && !keep.has(a)) a = a.parent; return a; };
+    const r2 = v => Math.round(v * 100) / 100, r3 = v => Math.round(v * 1000) / 1000;
+    const gs = g => { const o = {}; for (const k of GK) o[k] = r3(g[k]); o.B = g.B.map(r3); return o; };
+    const ms = {};
+    for (const k in this.milestones) { const m = this.milestones[k]; ms[k] = { t: m.t, sp: m.sp && keep.has(m.sp) ? m.sp.id : null }; }
+    return {
+      v: 2, savedAt: Date.now(), seed: this.seed, s: this._s, t: this.t, nid: this.nid, spid: this.spid,
+      sps: [...keep].map(sp => { const p = near(sp); return { id: sp.id, p: p ? p.id : null, a: sp.anc ? sp.anc.id : null, f: sp.founder, fB: sp.fB.map(r3), b: sp.born, x: sp.extinct, pop: sp.pop, pk: sp.peak, r: sp.recognized, h: sp.hue, n: sp.name, g: sp.genus, m: sp.mean, tr: sp.trait || null }; }),
+      act: [...this.active].map(sp => sp.id), rec: this.recognized.map(sp => sp.id),
+      cr: this.creatures.map(c => ({ id: c.id, x: r2(c.x), y: r2(c.y), a: r2(c.a), g: gs(c.g), s: c.sp.id, e: r2(c.e), age: c.age, gen: c.gen, cool: c.cool, v: r2(c.v), ph: r2(c.ph), k: c.kills, ma: r2(c.maxAge) })),
+      pl: this.plants.filter(p => !p.dead).map(p => [r2(p.x), r2(p.y), r2(p.e), p.age, Math.round(p.maxAge), r3(p.g.grow), r3(p.g.tough), r3(p.g.spread), r3(p.g.tpref), r3(p.g.landTol)]),
+      meat: this.meat.filter(m => !m.dead).map(m => [r2(m.x), r2(m.y), r2(m.e), m.b]),
+      vents: this.vents, climate: this.climate, ct: this.climateTarget, nc: this.nextClimate, ch: this.climateHold,
+      mg: this.maxGen, era: this.era, er: this.eraRank, ms, events: this.events, history: this.history,
+      names: [...this.names], genera: [...this.genera],
+      cumO: this.cumO, oxyDip: this.oxyDip, sea: this.seaLevel, sf: this.seaFalling, ncat: this.nextCatastrophe, cats: this.catastrophes || 0
+    };
+  }
+  restore(o) {
+    this._s = o.s; this.t = o.t; this.nid = o.nid; this.spid = o.spid;
+    const byId = new Map();
+    for (const d of o.sps) byId.set(d.id, { id: d.id, parent: null, founder: d.f, fB: d.fB, born: d.b, extinct: d.x, pop: d.pop, peak: d.pk, recognized: d.r, hue: d.h, name: d.n, genus: d.g, mean: d.m, anc: null, trait: d.tr, rep: null, _n: 0, _s: {} });
+    for (const d of o.sps) { const sp = byId.get(d.id); sp.parent = byId.get(d.p) || null; sp.anc = byId.get(d.a) || null; }
+    for (const id of o.act) { const sp = byId.get(id); if (sp) this.active.add(sp); }
+    for (const id of o.rec) { const sp = byId.get(id); if (sp) this.recognized.push(sp); }
+    for (const d of o.cr) {
+      const sp = byId.get(d.s); if (!sp) continue;
+      const c = { id: d.id, x: d.x, y: d.y, a: d.a, g: d.g, sp, e: d.e, age: d.age, gen: d.gen, dead: false, cool: d.cool, ecool: 0, v: d.v, ph: d.ph, ate: 0, kills: d.k || 0, turnOut: 0 };
+      this.derive(c); c.e = d.e; c.maxAge = d.ma;
+      if (!sp.rep) sp.rep = c.g;
+      this.creatures.push(c);
+    }
+    this.plants = o.pl.map(a => ({ x: a[0], y: a[1], e: a[2], age: a[3], maxAge: a[4], g: { grow: a[5], tough: a[6], spread: a[7], tpref: a[8], landTol: a[9] }, dead: false }));
+    this.meat = o.meat.map(a => ({ x: a[0], y: a[1], e: a[2], b: a[3], dead: false }));
+    this.vents = o.vents; this.climate = o.climate; this.climateTarget = o.ct; this.nextClimate = o.nc; this.climateHold = o.ch || 0;
+    this.maxGen = o.mg; this.era = o.era; this.eraRank = o.er;
+    for (const k in o.ms) this.milestones[k] = { t: o.ms[k].t, sp: byId.get(o.ms[k].sp) || null };
+    this.events = o.events || []; this.history = o.history || [];
+    this.names = new Set(o.names || []); this.genera = new Set(o.genera || []);
+    this.cumO = o.cumO; this.oxyDip = o.oxyDip || 0; this.oxygen = Math.max(0.03, 1 - Math.exp(-this.cumO / 1.5e6) - this.oxyDip);
+    this.seaLevel = o.sea; this.seaFalling = o.sf; this.nextCatastrophe = o.ncat; this.catastrophes = o.cats || 0;
+    this.terrainVer++;
+  }
+}
+
+function fmtSpan(y) {
+  if (y >= 1e9) return (y / 1e9).toFixed(2) + ' billion years';
+  if (y >= 1.5e6) return (y / 1.5e6).toFixed(y >= 1e8 ? 0 : 1) + ' million years';
+  return Math.round(y / 1e3) + ' thousand years';
+}
+
+const api = { Sim, W, H, YPT, TC, TW, TH, GENES, NI, NH, NO, O1, O2, O3, NB, IN_LABELS, SEED_LINKS, links, hiddenUsed, fmtSpan };
+if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Evo = api;
+})(typeof window !== 'undefined' ? window : this);
+
+</script>
+<script>
+(function(){
+'use strict';
+const { Sim, W, H, YPT, TC, TW, TH, NI, NH, NO, O1, O2, O3, IN_LABELS, links, hiddenUsed } = window.Evo;
+const TAU = Math.PI * 2;
+const UM = 25; // micrometres per world unit
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = id => document.getElementById(id);
+
+const SAVE_KEY = 'genesis-pool-save-v2';
+const CATCH_RATE = 90, CATCH_MAX = 18000; // ticks per real second at 1x, and the catch-up cap
+let storageOK = true, saved = null;
+try { const raw = localStorage.getItem(SAVE_KEY); saved = raw ? JSON.parse(raw) : null; } catch (e) { storageOK = false; saved = null; }
+let sim = null;
+if (saved && saved.v === 2) { try { sim = new Sim(saved.seed, saved); } catch (e) { sim = null; saved = null; } }
+const isNewWorld = !sim;
+if (!sim) sim = new Sim((Math.random() * 1e9) | 0);
+const SPEEDS = [{ k: '½×', s: 0.75 }, { k: '1×', s: 1.5 }, { k: '4×', s: 6 }, { k: '12×', s: 18 }];
+let speedIdx = 1, paused = false, selected = null, follow = false, spot = null, catchUp = null;
+
+/* ---------- helpers ---------- */
+const tempC = T => 14 + T * 12;
+function fmtTime(t) {
+  const y = t * YPT;
+  if (y >= 1e9) return { v: (y / 1e9).toFixed(2), u: 'billion years' };
+  return { v: (y / 1e6).toFixed(1), u: 'million years' };
+}
+function shortTime(t) {
+  const y = t * YPT;
+  return y >= 1e9 ? (y / 1e9).toFixed(2) + ' Gy' : Math.round(y / 1e6) + ' My';
+}
+const dietLabel = d => d > 0.55 ? 'Predator' : d > 0.3 ? 'Omnivore' : d > 0.15 ? 'Grazer, scavenges' : 'Grazer';
+const eyeLabel = s => s > 0.6 ? 'Paired eyes' : s > 0.3 ? 'Eyespot' : 'None';
+const bodyMM = size => ((2.2 + size * 3) * 2 * UM / 1000);
+function traitLine(m) {
+  const t = [dietLabel(m.diet)];
+  if (m.sense > 0.3) t.push(m.sense > 0.6 ? 'eyes' : 'eyespot');
+  if (m.speed > 1.3) t.push('swimmer');
+  if (m.size > 1.6) t.push('multicellular');
+  if (m.armor > 0.3) t.push('spined');
+  if (m.terr > 0.55) t.push('walks on land'); else if (m.terr > 0.3) t.push('amphibious');
+  if (m.links !== undefined && m.links > 22) t.push(Math.round(m.links) + ' neural links');
+  t.push(bodyMM(m.size).toFixed(2) + ' mm');
+  return t.join(' · ');
+}
+
+/* ---------- organism drawing ---------- */
+function drawMorph(ctx, x, y, a, g, hue, r, ph, alpha) {
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(a); ctx.globalAlpha = alpha;
+  const lw = Math.max(0.45, r * 0.1);
+  const ex = 1 + Math.min(0.5, g.speed * 0.14), ey = 1 / (1 + Math.min(0.25, g.speed * 0.06));
+  if (g.speed > 0.7 && g.terr < 0.6) {
+    const n = g.size > 2.2 ? 2 : 1, len = r * (0.7 + g.speed * 0.5), amp = r * 0.22;
+    ctx.strokeStyle = `hsla(${hue},45%,74%,.75)`; ctx.lineWidth = lw;
+    for (let k = 0; k < n; k++) {
+      const off = n === 2 ? (k ? 1 : -1) * r * 0.32 : 0;
+      ctx.beginPath();
+      for (let i = 0; i <= 10; i++) {
+        const u = i / 10, px = -r * 0.85 * ex - len * u, py = off * (1 - u * 0.3) + Math.sin(ph - u * 5 + k * 1.7) * amp * u;
+        i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.stroke();
+    }
+  }
+  if (g.terr > 0.3) {
+    const pairs = g.size > 2.5 ? 3 : 2, L = r * (0.45 + g.terr * 0.5);
+    ctx.strokeStyle = `hsla(${hue},30%,72%,.9)`; ctx.lineWidth = lw * 1.2; ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let k = 0; k < pairs; k++) {
+      const fx = (pairs === 2 ? (k ? -0.35 : 0.35) : (k - 1) * -0.45) * r * ex, sw = Math.sin(ph * 0.6 + k * 2) * r * 0.25;
+      ctx.moveTo(fx, -r * 0.6 * ey); ctx.lineTo(fx + sw, -r * ey - L);
+      ctx.moveTo(fx, r * 0.6 * ey); ctx.lineTo(fx - sw, r * ey + L);
+    }
+    ctx.stroke(); ctx.lineCap = 'butt';
+  }
+  if (g.armor > 0.3) {
+    const n = 6 + Math.round(g.armor * 8), L = r * (0.25 + g.armor * 0.6);
+    ctx.strokeStyle = `hsla(${hue},25%,84%,.85)`; ctx.lineWidth = lw * 0.9;
+    ctx.beginPath();
+    for (let k = 0; k < n; k++) {
+      const an = k / n * TAU + 0.2, c = Math.cos(an), s = Math.sin(an);
+      ctx.moveTo(c * r * 0.9 * ex, s * r * 0.9 * ey); ctx.lineTo(c * (r * ex + L), s * (r * ey + L));
+    }
+    ctx.stroke();
+  }
+  const lobes = g.size > 1.6 ? Math.min(7, 3 + Math.floor((g.size - 1.6) * 1.8)) : 0;
+  ctx.beginPath();
+  for (let i = 0; i <= 24; i++) {
+    const th = i / 24 * TAU;
+    const rr = r * (1 + (lobes ? 0.12 * Math.sin(lobes * th + ph * 0.15) : 0.05 * Math.sin(3 * th + ph * 0.3)));
+    const px = Math.cos(th) * rr * ex, py = Math.sin(th) * rr * ey;
+    i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = `hsla(${hue},56%,${lobes ? 50 : 56}%,.86)`; ctx.fill();
+  ctx.strokeStyle = `hsla(${hue},70%,80%,.9)`; ctx.lineWidth = lw * 0.8; ctx.stroke();
+  if (lobes) {
+    ctx.fillStyle = `hsla(${hue},55%,72%,.32)`;
+    for (let k = 0; k < lobes; k++) {
+      const an = k / lobes * TAU;
+      ctx.beginPath(); ctx.arc(Math.cos(an) * r * 0.52 * ex, Math.sin(an) * r * 0.52 * ey, r * 0.22, 0, TAU); ctx.fill();
+    }
+  }
+  ctx.fillStyle = `hsla(${hue},45%,26%,.85)`;
+  ctx.beginPath(); ctx.arc(-r * 0.12, 0, r * 0.27, 0, TAU); ctx.fill();
+  if (g.diet > 0.5) {
+    ctx.strokeStyle = 'hsla(8,78%,68%,.95)'; ctx.lineWidth = lw * 1.1;
+    ctx.beginPath();
+    ctx.moveTo(r * ex * 0.82, -r * 0.34); ctx.lineTo(r * ex * 1.3, -r * 0.05);
+    ctx.moveTo(r * ex * 0.82, r * 0.34); ctx.lineTo(r * ex * 1.3, r * 0.05);
+    ctx.stroke();
+  }
+  if (g.sense > 0.3) {
+    const er = Math.max(0.6, r * (0.12 + g.sense * 0.13));
+    const pts = g.sense > 0.6 ? [[r * 0.45 * ex, -r * 0.33 * ey], [r * 0.45 * ex, r * 0.33 * ey]] : [[r * 0.5 * ex, 0]];
+    for (const p of pts) {
+      ctx.fillStyle = '#F3F0E4'; ctx.beginPath(); ctx.arc(p[0], p[1], er, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#0B1A1E'; ctx.beginPath(); ctx.arc(p[0] + er * 0.3, p[1], er * 0.5, 0, TAU); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+function portrait(cv, g, hue) {
+  const c = cv.getContext('2d'), s = cv.width;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, s, s);
+  const r = s * (0.13 + Math.min(1, g.size / 5) * 0.14);
+  drawMorph(c, s * 0.47, s / 2, 0, g, hue, r, 1.2, 1);
+}
+
+/* ---------- world canvas ---------- */
+const cv = $('world'), ctx = cv.getContext('2d');
+let cw = 1, ch = 1, dpr = 1, fit = 1;
+const cam = { x: W / 2, y: H / 2, z: 1 };
+function resize() {
+  const r = cv.getBoundingClientRect();
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  cw = Math.max(1, r.width); ch = Math.max(1, r.height);
+  cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+  fit = Math.min(cw / W, ch / H);
+}
+new ResizeObserver(resize).observe(cv);
+resize();
+
+function updateCamera() {
+  let tx = W / 2, ty = H / 2, tz = 1;
+  if (follow && selected && !selected.dead) { tx = selected.x; ty = selected.y; tz = 2.8; }
+  cam.z += (tz - cam.z) * 0.08;
+  cam.x += (tx - cam.x) * 0.1; cam.y += (ty - cam.y) * 0.1;
+  const s = fit * cam.z, hw = cw / 2 / s, hh = ch / 2 / s;
+  cam.x = hw * 2 >= W ? W / 2 : Math.min(Math.max(cam.x, hw), W - hw);
+  cam.y = hh * 2 >= H ? H / 2 : Math.min(Math.max(cam.y, hh), H - hh);
+}
+
+const PLANT_COLORS = ['rgba(150,205,120,.78)', 'rgba(110,170,95,.82)', 'rgba(80,130,80,.9)', 'rgba(196,200,110,.8)', 'rgba(170,175,90,.85)', 'rgba(140,145,75,.9)'];
+const plantPaths = [];
+const TR = 5, TWR = TW * TR, THR = TH * TR;
+const terrCv = document.createElement('canvas'); terrCv.width = TWR; terrCv.height = THR;
+const tctx = terrCv.getContext('2d');
+let terrVer = -1, terrSea = -1;
+function buildTerrainImage() {
+  terrVer = sim.terrainVer; terrSea = sim.seaLevel;
+  const img = tctx.createImageData(TWR, THR), d = img.data, sl = sim.seaLevel, h = sim.height;
+  const hv = (x, y) => h[Math.min(TH - 1, Math.max(0, y)) * TW + Math.min(TW - 1, Math.max(0, x))];
+  for (let py = 0; py < THR; py++) for (let px = 0; px < TWR; px++) {
+    const fx = (px + 0.5) / TR - 0.5, fy = (py + 0.5) / TR - 0.5, ix = Math.floor(fx), iy = Math.floor(fy), tx = fx - ix, ty = fy - iy;
+    const v = hv(ix, iy) * (1 - tx) * (1 - ty) + hv(ix + 1, iy) * tx * (1 - ty) + hv(ix, iy + 1) * (1 - tx) * ty + hv(ix + 1, iy + 1) * tx * ty;
+    const o = (py * TWR + px) * 4;
+    if (v > sl) {
+      const e = Math.min(1, (v - sl) / 0.25);
+      if (v - sl < 0.01) { d[o] = 200; d[o + 1] = 182; d[o + 2] = 128; }
+      else { d[o] = 132 + e * 28; d[o + 1] = 120 + e * 18; d[o + 2] = 80 + e * 8; }
+      d[o + 3] = 255;
+    } else {
+      const depth = sl - v, a = depth < 0.12 ? 1 - depth / 0.12 : 0;
+      d[o] = 70; d[o + 1] = 150; d[o + 2] = 150; d[o + 3] = Math.round(a * a * 80);
+    }
+  }
+  tctx.putImageData(img, 0, 0);
+}
+
+let frame = 0;
+function draw() {
+  frame++;
+  updateCamera();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#07171C'; ctx.fillRect(0, 0, cw, ch);
+  const s = fit * cam.z;
+  const ox = cw / 2 - cam.x * s, oy = ch / 2 - cam.y * s;
+  ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * ox, dpr * oy);
+
+  // water + temperature bands
+  ctx.fillStyle = '#0A2128'; ctx.fillRect(0, 0, W, H);
+  const grd = ctx.createLinearGradient(0, 0, 0, H);
+  for (let i = 0; i <= 6; i++) {
+    const y = i / 6 * H, T = sim.tempAt(y);
+    grd.addColorStop(i / 6, T < 0 ? `rgba(127,178,224,${Math.min(0.24, -T * 0.15)})` : `rgba(240,150,90,${Math.min(0.2, T * 0.12)})`);
+  }
+  ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+
+  // land and shallows
+  if (terrVer !== sim.terrainVer || terrSea !== sim.seaLevel && frame % 30 === 0) buildTerrainImage();
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(terrCv, 0, 0, W, H);
+
+  // vents
+  for (const v of sim.vents) {
+    const rad = 95 + v.p * 45;
+    const rg = ctx.createRadialGradient(v.x, v.y, 0, v.x, v.y, rad);
+    rg.addColorStop(0, `rgba(242,184,100,${0.10 + v.p * 0.05})`);
+    rg.addColorStop(1, 'rgba(242,184,100,0)');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(v.x, v.y, rad, 0, TAU); ctx.fill();
+  }
+
+  // plants, bucketed by color so a thousand of them draw fast
+  for (let b = 0; b < PLANT_COLORS.length; b++) plantPaths[b] = null;
+  for (const p of sim.plants) {
+    if (p.dead) continue;
+    const b = (p.g.landTol > 0.45 ? 3 : 0) + (p.g.tough > 0.5 ? 2 : p.g.tough > 0.2 ? 1 : 0);
+    const pp = plantPaths[b] || (plantPaths[b] = new Path2D());
+    const pr = 0.9 + Math.min(2.4, p.e * 0.2);
+    pp.moveTo(p.x + pr, p.y); pp.arc(p.x, p.y, pr, 0, TAU);
+  }
+  for (let b = 0; b < PLANT_COLORS.length; b++) if (plantPaths[b]) { ctx.fillStyle = PLANT_COLORS[b]; ctx.fill(plantPaths[b]); }
+  ctx.fillStyle = 'rgba(229,122,98,.75)';
+  ctx.beginPath();
+  for (const m of sim.meat) { if (m.dead) continue; ctx.moveTo(m.x + 1.7, m.y); ctx.arc(m.x, m.y, 1.7, 0, TAU); }
+  ctx.fill();
+
+  // organisms
+  const vx0 = cam.x - cw / 2 / s - 30, vx1 = cam.x + cw / 2 / s + 30, vy0 = cam.y - ch / 2 / s - 30, vy1 = cam.y + ch / 2 / s + 30;
+  const ph0 = reduceMotion ? 1 : 0;
+  for (const c of sim.creatures) {
+    if (c.x < vx0 || c.x > vx1 || c.y < vy0 || c.y > vy1) continue;
+    const alpha = spot && c.sp !== spot ? 0.18 : 1;
+    if (c.ate > 0 && alpha === 1) {
+      ctx.fillStyle = c.kills && c.ate > 6 ? 'rgba(229,122,98,.22)' : 'rgba(242,184,100,.16)';
+      ctx.beginPath(); ctx.arc(c.x, c.y, c.r * 1.9, 0, TAU); ctx.fill();
+    }
+    drawMorph(ctx, c.x, c.y, c.a, c.g, c.sp.hue, c.r, reduceMotion ? ph0 : c.ph, alpha);
+  }
+
+  // impact flash
+  if (sim.flash) {
+    const k = (sim.t - sim.flash.t) / 400, f = sim.flash;
+    ctx.strokeStyle = `rgba(242,184,100,${0.8 * (1 - k)})`; ctx.lineWidth = 6 * (1 - k) + 1;
+    ctx.beginPath(); ctx.arc(f.x, f.y, f.R * (0.3 + k * 1.2), 0, TAU); ctx.stroke();
+    ctx.fillStyle = `rgba(229,122,98,${0.25 * (1 - k)})`;
+    ctx.beginPath(); ctx.arc(f.x, f.y, f.R, 0, TAU); ctx.fill();
+  }
+
+  // selection
+  if (selected && !selected.dead) {
+    ctx.strokeStyle = 'rgba(242,184,100,.9)'; ctx.lineWidth = 1.2 / s * 1.5;
+    ctx.setLineDash([4 / s * 1.5, 3 / s * 1.5]);
+    ctx.beginPath(); ctx.arc(selected.x, selected.y, selected.r * 1.8 + 5, 0, TAU); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(242,184,100,.18)'; ctx.lineWidth = 1 / s;
+    ctx.beginPath(); ctx.arc(selected.x, selected.y, selected.senseR, 0, TAU); ctx.stroke();
+  }
+
+  // edge labels (screen space)
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const top = oy, bot = oy + H * s, left = ox;
+  ctx.font = '500 10.5px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.fillStyle = 'rgba(160,190,200,.7)';
+  ctx.textBaseline = 'top';
+  ctx.fillText('COLD NORTH  ' + tempC(sim.tempAt(0)).toFixed(0) + '°C', Math.max(left, 0) + 12, Math.max(top, 0) + 10);
+  ctx.textBaseline = 'bottom';
+  ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(240,180,130,.75)';
+  ctx.fillText('WARM SOUTH  ' + tempC(sim.tempAt(H)).toFixed(0) + '°C', Math.min(ox + W * s, cw) - 12, Math.min(bot, ch) - 48);
+  ctx.textAlign = 'left';
+}
+
+/* ---------- picking ---------- */
+cv.addEventListener('click', e => {
+  const r = cv.getBoundingClientRect();
+  const s = fit * cam.z;
+  const wx = (e.clientX - r.left - cw / 2) / s + cam.x, wy = (e.clientY - r.top - ch / 2) / s + cam.y;
+  let best = null, bd = Infinity;
+  for (const c of sim.creatures) {
+    const d = Math.hypot(c.x - wx, c.y - wy) - c.r;
+    if (d < bd) { bd = d; best = c; }
+  }
+  if (best && bd < 14 / s + 2) { selected = best; $('inspect').hidden = false; renderInspector(true); }
+  else if (!follow) { selected = null; $('inspect').hidden = true; }
+});
+$('iClose').addEventListener('click', () => { selected = null; follow = false; $('inspect').hidden = true; });
+$('iFollow').addEventListener('click', () => { follow = !follow; $('iFollow').textContent = follow ? 'Stop following' : 'Follow'; });
+
+function renderInspector(force) {
+  const c = selected;
+  if (!c) return;
+  if (force) portrait($('inspCv'), c.g, c.sp.hue);
+  let an = c.sp; while (an && !an.recognized) an = an.parent;
+  $('iName').textContent = c.sp.name || (an ? 'Variant of ' + an.name : 'Unnamed early cell');
+  $('iId').textContent = '#' + c.id + ' · generation ' + c.gen;
+  $('iDead').hidden = !c.dead;
+  if (c.dead && follow) { follow = false; $('iFollow').textContent = 'Follow'; }
+  $('iEnergy').style.width = Math.max(0, Math.min(100, c.e / c.cap * 100)).toFixed(0) + '%';
+  const g = c.g;
+  const rows = [
+    ['Age', (c.age * YPT / 1e6).toFixed(1) + ' My'],
+    ['Energy', Math.max(0, c.e).toFixed(0) + ' / ' + c.cap.toFixed(0)],
+    ['Diet', dietLabel(g.diet)],
+    ['Body', bodyMM(g.size).toFixed(2) + ' mm'],
+    ['Vision', eyeLabel(g.sense) + (g.sense > 0.3 ? ', ' + (c.senseR * UM / 1000).toFixed(1) + ' mm' : '')],
+    ['Movement', g.terr > 0.55 ? (g.size > 2.5 ? 'Three pairs of legs' : 'Two pairs of legs') : g.terr > 0.3 ? 'Stubby legs and fins' : g.speed > 1.3 ? 'Strong flagella' : g.speed > 0.7 ? 'Flagellum' : 'Drifts'],
+    ['Habitat', g.terr > 0.55 ? 'Land' : g.terr > 0.3 ? 'Shoreline' : 'Water'],
+    ['Defense', g.armor > 0.3 ? 'Spines' : 'None'],
+    ['Prefers', tempC(g.tpref).toFixed(0) + '°C water'],
+    ['Offspring', String(1 + Math.floor(g.litter * 2.999)) + ' per division']
+  ];
+  if (c.kills) rows.push(['Kills', String(c.kills)]);
+  $('iStats').innerHTML = rows.map(r => `<dt>${r[0]}</dt><dd>${r[1]}</dd>`).join('');
+  if (force) drawBrain(g.B);
+  const hu = hiddenUsed(g.B);
+  $('brainCap').textContent = links(g.B) + ' neural links' + (hu ? ', ' + hu + ' inner neuron' + (hu > 1 ? 's' : '') + ' in use' : ', sensors wired straight to muscles');
+}
+function drawBrain(B) {
+  const c = $('brainCv'), x = c.getContext('2d'), w = c.width, h = c.height;
+  x.clearRect(0, 0, w, h);
+  const ix = 190, hx = 310, oxp = 405;
+  const iy = i => 10 + i * ((h - 20) / (NI - 1)), hy = j => 30 + j * ((h - 60) / (NH - 1)), oy = k => h * (k ? 0.66 : 0.34);
+  const line = (x1, y1, x2, y2, wv) => {
+    x.strokeStyle = wv > 0 ? `rgba(242,184,100,${Math.min(0.9, 0.25 + Math.abs(wv) * 0.25)})` : `rgba(127,178,224,${Math.min(0.9, 0.25 + Math.abs(wv) * 0.25)})`;
+    x.lineWidth = Math.min(5, 0.8 + Math.abs(wv) * 1.2);
+    x.beginPath(); x.moveTo(x1, y1); x.lineTo(x2, y2); x.stroke();
+  };
+  for (let i = 0; i < NI; i++) for (let k = 0; k < NO; k++) { const wv = B[O3 + i * NO + k]; if (wv) line(ix, iy(i), oxp, oy(k), wv); }
+  for (let i = 0; i < NI; i++) for (let j = 0; j < NH; j++) { const wv = B[O1 + i * NH + j]; if (wv) line(ix, iy(i), hx, hy(j), wv); }
+  for (let j = 0; j < NH; j++) for (let k = 0; k < NO; k++) { const wv = B[O2 + j * NO + k]; if (wv) line(hx, hy(j), oxp, oy(k), wv); }
+  x.font = '21px "IBM Plex Mono", ui-monospace, monospace'; x.textBaseline = 'middle';
+  for (let i = 0; i < NI; i++) {
+    x.fillStyle = '#88A39E'; x.textAlign = 'right'; x.fillText(IN_LABELS[i], ix - 10, iy(i));
+    x.fillStyle = '#DCE6DE'; x.beginPath(); x.arc(ix, iy(i), 4, 0, TAU); x.fill();
+  }
+  for (let j = 0; j < NH; j++) { x.fillStyle = '#557570'; x.beginPath(); x.arc(hx, hy(j), 6, 0, TAU); x.fill(); }
+  x.textAlign = 'left';
+  ['turn', 'speed'].forEach((lab, k) => { x.fillStyle = '#F2B864'; x.beginPath(); x.arc(oxp, oy(k), 7, 0, TAU); x.fill(); x.fillStyle = '#DCE6DE'; x.fillText(lab, oxp + 12, oy(k)); });
+}
+
+/* ---------- controls ---------- */
+const speedsEl = $('speeds');
+SPEEDS.forEach((sp, i) => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.textContent = sp.k; b.setAttribute('aria-pressed', i === speedIdx);
+  b.title = i === 0 ? 'Slow' : i === 1 ? 'Normal pace' : 'Faster';
+  b.addEventListener('click', () => { speedIdx = i; [...speedsEl.children].forEach((x, j) => x.setAttribute('aria-pressed', j === i)); });
+  speedsEl.appendChild(b);
+});
+function setPaused(p) { paused = p; $('play').textContent = p ? 'Resume' : 'Pause'; }
+$('play').addEventListener('click', () => setPaused(!paused));
+document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); setPaused(!paused); } });
+let resetArm = 0;
+$('reset').addEventListener('click', () => {
+  const b = $('reset');
+  if (Date.now() - resetArm < 3000) {
+    sim = new Sim((Math.random() * 1e9) | 0);
+    for (let i = 0; i < 240; i++) sim.step();
+    catchUp = null; $('catch').hidden = true;
+    writeSave();
+    selected = null; follow = false; spot = null; $('inspect').hidden = true;
+    lastEvt = null; b.textContent = 'New world'; b.classList.remove('warn'); resetArm = 0;
+    worldLine(); refreshSide(true);
+    return;
+  }
+  resetArm = Date.now(); b.textContent = 'Tap again to restart'; b.classList.add('warn');
+  setTimeout(() => { if (Date.now() - resetArm >= 2900) { b.textContent = 'New world'; b.classList.remove('warn'); } }, 3000);
+});
+function worldLine() {
+  $('worldline').textContent = 'World ' + (sim.seed % 100000) + ' · ' + (storageOK ? 'autosaves in this browser and picks up where you left off' : 'this browser blocks saving, so it restarts when reopened');
+}
+function writeSave() {
+  if (!storageOK || catchUp) return;
+  try {
+    const o = sim.snapshot(); o.paused = paused; o.speed = speedIdx;
+    localStorage.setItem(SAVE_KEY, JSON.stringify(o));
+  } catch (e) {
+    try { const o = sim.snapshot(); o.history = o.history.slice(-150); o.events = o.events.slice(-40); o.paused = paused; o.speed = speedIdx; localStorage.setItem(SAVE_KEY, JSON.stringify(o)); }
+    catch (e2) { storageOK = false; worldLine(); }
+  }
+}
+setInterval(writeSave, 15000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') writeSave(); });
+window.addEventListener('pagehide', writeSave);
+worldLine();
+
+/* ---------- side panels ---------- */
+const spList = $('species');
+function renderSpecies() {
+  const live = [...sim.active].filter(s => s.recognized && s.pop > 0).sort((a, b) => b.pop - a.pop);
+  const top = live.slice(0, 8);
+  if (spot && !live.includes(spot)) spot = null;
+  $('spNote').textContent = live.length > 8 ? 'top 8 of ' + live.length : 'largest first';
+  if (!top.length) { spList.innerHTML = '<li class="empty" style="cursor:default">No lineage has stabilized into a species yet.</li>'; return; }
+  spList.innerHTML = '';
+  for (const sp of top) {
+    const li = document.createElement('li');
+    li.tabIndex = 0; li.setAttribute('role', 'button'); li.setAttribute('aria-pressed', spot === sp);
+    li.title = 'Highlight in the sea';
+    const pc = document.createElement('canvas'); pc.width = 80; pc.height = 80;
+    portrait(pc, sp.mean, sp.hue);
+    const mid = document.createElement('div');
+    mid.innerHTML = `<div class="nm"></div><div class="tr"></div>`;
+    mid.children[0].textContent = sp.name; mid.children[1].textContent = traitLine(sp.mean);
+    const n = document.createElement('div'); n.className = 'n';
+    n.innerHTML = `${sp.pop}<small>since ${shortTime(sp.born)}</small>`;
+    li.append(pc, mid, n);
+    const toggle = () => { spot = spot === sp ? null : sp; renderSpecies(); };
+    li.addEventListener('click', toggle);
+    li.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+    spList.appendChild(li);
+  }
+}
+
+const VITALS = [
+  { k: 'Animals', col: '#DCE6DE', get: h => h.pop, fmt: v => Math.round(v), lo: 0 },
+  { k: 'Species', col: '#F2B864', get: h => h.spc, fmt: v => Math.round(v), lo: 0 },
+  { k: 'Plants', col: '#96CD78', get: h => h.plants || 0, fmt: v => Math.round(v), lo: 0 },
+  { k: 'Oxygen', col: '#7FC4D8', get: h => h.oxy || 0, fmt: v => Math.round(v * 100) + '%', lo: 0, hi: 1 },
+  { k: 'Body diameter', col: '#9CC7A6', get: h => bodyMM(h.size), fmt: v => v.toFixed(2) + ' mm', lo: 0, hi: bodyMM(5) },
+  { k: 'Neural links', col: '#C3A6EE', get: h => h.links || 0, fmt: v => v.toFixed(0), lo: 0 },
+  { k: 'Meat in diet', col: '#E57A62', get: h => h.diet, fmt: v => Math.round(v * 100) + '%', lo: 0, hi: 1 },
+  { k: 'Armor', col: '#D8CDB8', get: h => h.armor, fmt: v => Math.round(v * 100) + '%', lo: 0, hi: 1 },
+  { k: 'Living on land', col: '#C8B478', get: h => h.land || 0, fmt: v => Math.round(v * 100) + '%', lo: 0, hi: 1 },
+  { k: 'Climate', col: '#E0A07A', get: h => tempC(h.temp), fmt: v => v.toFixed(1) + '°C', lo: 4, hi: 24 }
+];
+const vitEl = $('vitals');
+for (const v of VITALS) {
+  const row = document.createElement('div'); row.className = 'vital';
+  row.innerHTML = `<span></span><canvas></canvas><b>–</b>`;
+  row.children[0].textContent = v.k;
+  vitEl.appendChild(row);
+  v.cv = row.children[1]; v.val = row.children[2];
+}
+function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+function renderVitals() {
+  const hs = sim.history;
+  for (const v of VITALS) {
+    const c = v.cv, r = c.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1);
+    const w = Math.max(10, r.width), h = 26;
+    if (c.width !== Math.round(w * d)) { c.width = Math.round(w * d); c.height = Math.round(h * d); }
+    const x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); x.clearRect(0, 0, w, h);
+    x.strokeStyle = 'rgba(136,163,158,.14)'; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(0, h - 0.5); x.lineTo(w, h - 0.5); x.stroke();
+    if (hs.length < 2) { v.val.textContent = '–'; continue; }
+    const vals = hs.map(v.get);
+    const lo = v.lo, hi = v.hi !== undefined ? v.hi : Math.max(1, ...vals) * 1.1;
+    const px = i => 2 + i / (hs.length - 1) * (w - 6), py = val => h - 2 - (Math.min(hi, Math.max(lo, val)) - lo) / (hi - lo) * (h - 5);
+    x.beginPath(); x.moveTo(px(0), h);
+    vals.forEach((val, i) => x.lineTo(px(i), py(val)));
+    x.lineTo(px(vals.length - 1), h); x.closePath();
+    x.fillStyle = hexA(v.col, 0.14); x.fill();
+    x.beginPath(); vals.forEach((val, i) => i ? x.lineTo(px(i), py(val)) : x.moveTo(px(i), py(val)));
+    x.strokeStyle = v.col; x.lineWidth = 1.4; x.stroke();
+    const lx = px(vals.length - 1), ly = py(vals[vals.length - 1]);
+    x.fillStyle = v.col; x.beginPath(); x.arc(lx, ly, 2.2, 0, TAU); x.fill();
+    v.val.textContent = v.fmt(vals[vals.length - 1]);
+  }
+}
+
+const treeCv = $('tree');
+function renderTree() {
+  const r = treeCv.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1);
+  const w = Math.max(10, r.width), h = Math.max(10, r.height);
+  if (treeCv.width !== Math.round(w * d) || treeCv.height !== Math.round(h * d)) { treeCv.width = Math.round(w * d); treeCv.height = Math.round(h * d); }
+  const x = treeCv.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); x.clearRect(0, 0, w, h);
+  let list = sim.recognized.filter(s => s.extinct === null || s.peak >= 20);
+  if (list.length > 90) {
+    list = list.slice().sort((a, b) => ((b.extinct === null) - (a.extinct === null)) || (b.peak - a.peak)).slice(0, 90);
+  }
+  const inc = new Set(list);
+  const up = sp => { let a = sp.anc; while (a && !inc.has(a)) a = a.anc; return a; };
+  const kids = new Map(), roots = [];
+  list.sort((a, b) => a.born - b.born);
+  for (const sp of list) { const a = up(sp); if (a) { if (!kids.has(a)) kids.set(a, []); kids.get(a).push(sp); } else roots.push(sp); }
+  const order = [];
+  const walk = sp => { order.push(sp); for (const k of (kids.get(sp) || [])) walk(k); };
+  roots.forEach(walk);
+  const padL = 10, padR = 12, padT = 12, padB = 22;
+  x.font = '10.5px "IBM Plex Mono", ui-monospace, monospace'; x.fillStyle = 'rgba(136,163,158,.75)';
+  x.textBaseline = 'alphabetic';
+  x.textAlign = 'left'; x.fillText('0', padL, h - 7);
+  x.textAlign = 'right'; x.fillText(shortTime(sim.t) + ' (now)', w - padR, h - 7);
+  x.textAlign = 'left';
+  if (!order.length) { x.fillStyle = 'rgba(136,163,158,.75)'; x.font = '12px Figtree, system-ui, sans-serif'; x.fillText('Branches appear once lineages establish.', padL, h / 2); return; }
+  const lane = Math.min(10, (h - padT - padB) / order.length);
+  const ly = new Map(); order.forEach((sp, i) => ly.set(sp, padT + i * lane + lane / 2));
+  const tx = t => padL + (sim.t ? t / sim.t : 0) * (w - padL - padR);
+  for (const sp of order) {
+    const a = up(sp); if (!a) continue;
+    x.strokeStyle = `hsla(${sp.hue},40%,60%,.35)`; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(tx(sp.born), ly.get(a)); x.lineTo(tx(sp.born), ly.get(sp)); x.stroke();
+  }
+  for (const sp of order) {
+    const alive = sp.extinct === null, y = ly.get(sp);
+    const hl = spot === sp || (selected && selected.sp === sp);
+    x.strokeStyle = `hsla(${sp.hue},${alive ? 62 : 30}%,${alive ? 64 : 50}%,${alive ? 1 : 0.45})`;
+    x.lineWidth = hl ? 3.5 : alive ? Math.min(3, 1.4 + sp.pop / 40) : 1.1;
+    x.beginPath(); x.moveTo(tx(sp.born), y); x.lineTo(tx(alive ? sim.t : sp.extinct), y); x.stroke();
+    if (alive) { x.fillStyle = `hsl(${sp.hue},62%,68%)`; x.beginPath(); x.arc(tx(sim.t), y, 2.4, 0, TAU); x.fill(); }
+  }
+}
+
+const chron = $('chron');
+let lastEvt = null;
+function renderChronicle() {
+  const ev = sim.events;
+  if (ev.length && ev[ev.length - 1] === lastEvt) return;
+  lastEvt = ev[ev.length - 1] || null;
+  const items = ev.slice(-70).reverse();
+  chron.innerHTML = '';
+  for (const e of items) {
+    const li = document.createElement('li'); li.className = e.kind;
+    const t = document.createElement('time'); t.textContent = shortTime(e.t);
+    const dot = document.createElement('span'); dot.className = 'dot';
+    dot.style.background = e.hue !== null ? `hsl(${e.hue},60%,64%)` : e.kind === 'climate' ? '#7FB2E0' : e.kind === 'era' || e.kind === 'genesis' || e.kind === 'away' || e.kind === 'stage' ? '#F2B864' : e.kind === 'catastrophe' ? '#E57A62' : '#557570';
+    const p = document.createElement('p'); p.textContent = e.text;
+    li.append(t, dot, p); chron.appendChild(li);
+  }
+}
+
+function renderHeader() {
+  const ft = fmtTime(sim.t);
+  $('clock').textContent = ft.v; $('clockUnit').textContent = ft.u + ' elapsed';
+  $('era').textContent = sim.era;
+  $('sPop').textContent = sim.creatures.length;
+  let spc = 0; for (const s of sim.active) if (s.recognized && s.pop > 0) spc++;
+  $('sSpc').textContent = spc;
+  $('sGen').textContent = sim.maxGen;
+  $('sOxy').textContent = Math.round(sim.oxygen * 100) + '%';
+  $('sTemp').textContent = tempC(sim.climate).toFixed(1) + '°C';
+}
+
+function refreshSide(all) {
+  renderHeader();
+  if (all) { renderSpecies(); renderVitals(); renderTree(); renderChronicle(); }
+}
+
+/* ---------- main loop ---------- */
+let acc = 0, lastSide = 0, lastHead = 0, lastInsp = 0;
+function loop(now) {
+  if (catchUp) {
+    const t0 = performance.now();
+    while (catchUp.left > 0 && performance.now() - t0 < 40) { sim.step(); catchUp.left--; }
+    $('catchBar').style.width = ((1 - catchUp.left / catchUp.total) * 100).toFixed(0) + '%';
+    $('catchNote').textContent = 'Catching up: ' + shortTime(sim.t - catchUp.t0) + ' of ' + shortTime(catchUp.total);
+    if (catchUp.left <= 0) {
+      const span = shortTime(catchUp.total).replace(' My', ' million years').replace(' Gy', ' billion years');
+      sim.log('While you were away, the sea evolved for another ' + span + (catchUp.capped ? ' (the most it catches up in one go)' : '') + '.', 'away');
+      catchUp = null; $('catch').hidden = true; refreshSide(true); writeSave();
+    }
+  } else if (!paused) {
+    acc += SPEEDS[speedIdx].s;
+    const t0 = performance.now();
+    while (acc >= 1) { acc -= 1; sim.step(); if (performance.now() - t0 > 22) { acc = 0; break; } }
+  }
+  draw();
+  if (now - lastHead > 250) { lastHead = now; renderHeader(); }
+  if (now - lastSide > 1000) { lastSide = now; renderSpecies(); renderVitals(); renderTree(); renderChronicle(); }
+  if (selected && now - lastInsp > 250) { lastInsp = now; renderInspector(false); }
+  requestAnimationFrame(loop);
+}
+if (isNewWorld) {
+  // let the sea settle briefly so the first frame already shows life spreading
+  for (let i = 0; i < 240; i++) sim.step();
+  writeSave();
+} else {
+  if (typeof saved.speed === 'number' && SPEEDS[saved.speed]) { speedIdx = saved.speed; [...speedsEl.children].forEach((x, j) => x.setAttribute('aria-pressed', j === speedIdx)); }
+  if (saved.paused) setPaused(true);
+  const away = Math.max(0, (Date.now() - (saved.savedAt || Date.now())) / 1000);
+  const want = Math.floor(away * CATCH_RATE);
+  if (!saved.paused && want > 300) {
+    const total = Math.min(CATCH_MAX, want);
+    catchUp = { left: total, total, t0: sim.t, capped: want > CATCH_MAX };
+    $('catch').hidden = false;
+  }
+}
+saved = null;
+refreshSide(true);
+requestAnimationFrame(loop);
+})();
+</script>
+</body></html>
