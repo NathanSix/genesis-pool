@@ -217,9 +217,9 @@ const TAU = Math.PI * 2;
 
 /* ---------- genome layout ---------- */
 // continuous genes; body parts come from the segment list
-const GENES = { size: [0.4, 3], diet: [0, 1], tpref: [-1.2, 1.2], litter: [0, 1], terr: [0, 1], learn: [0, 1] };
+const GENES = { size: [0.4, 3], diet: [0, 1], tpref: [-1.2, 1.2], litter: [0, 1], terr: [0, 1], learn: [0, 1], depth: [0, 1], care: [0, 1] };
 const GK = Object.keys(GENES);
-const DWT = { size: 1, diet: 1.5, tpref: 0.8, litter: 0.5, terr: 1.2, learn: 0.5 };
+const DWT = { size: 1, diet: 1.5, tpref: 0.8, litter: 0.5, terr: 1.2, learn: 0.5, depth: 1.3, care: 0.8 };
 // segment types
 const SEG = ['body', 'fin', 'leg', 'eye', 'jaw', 'shell', 'spine', 'fat', 'feeler'];
 const S_BODY = 0, S_FIN = 1, S_LEG = 2, S_EYE = 3, S_JAW = 4, S_SHELL = 5, S_SPINE = 6, S_FAT = 7, S_FEEL = 8, NSEG = 9;
@@ -229,13 +229,13 @@ const PK = Object.keys(PGENES);
 const SPECIATE = 0.17;
 
 // brain: 18 senses -> growable hidden neurons with self-memory -> 3 outputs, plus direct links
-const NI = 19, NO = 3, MAXH = 16;
-const IN_LABELS = ['bias', 'food dir', 'food near', 'prey dir', 'prey near', 'threat dir', 'threat near', 'kin dir', 'kin near', 'mate dir', 'mate near', 'energy', 'comfort dir', 'bad ground', 'rhythm', 'noise', 'signal dir', 'signal level', 'daylight'];
+const NI = 21, NO = 3, MAXH = 16;
+const IN_LABELS = ['bias', 'food dir', 'food near', 'prey dir', 'prey near', 'threat dir', 'threat near', 'kin dir', 'kin near', 'mate dir', 'mate near', 'energy', 'comfort dir', 'bad ground', 'rhythm', 'noise', 'signal dir', 'signal level', 'daylight', 'parent dir', 'parent near'];
 const OUT_LABELS = ['turn', 'speed', 'signal'];
 function seedBrain() {
   const wd = new Array(NI * NO).fill(0);
   const d = (i, k, v) => { wd[i * NO + k] = v; };
-  d(1, 0, 2.5); d(3, 0, 3.0); d(5, 0, -3.0); d(7, 0, 0.3); d(9, 0, 2.5); d(12, 0, 0.8); d(13, 0, 1.6); d(15, 0, 0.8);
+  d(1, 0, 2.5); d(3, 0, 3.0); d(5, 0, -3.0); d(7, 0, 0.3); d(9, 0, 2.5); d(12, 0, 0.8); d(13, 0, 1.6); d(15, 0, 0.8); d(19, 0, 1.5);
   d(0, 1, 0.3); d(6, 1, 2.0); d(4, 1, 1.0); d(2, 1, -0.2); d(13, 1, -0.6);
   d(0, 2, -2.0);
   return { wd, h: [] };
@@ -256,7 +256,7 @@ function complexity(g) {
   const c = segCounts(g.segs); let kinds = 0; for (let t = 1; t < NSEG; t++) if (c[t]) kinds++;
   return g.segs.length + kinds * 2 + activeNeurons(g.B) * 1.5 + memoryNeurons(g.B) + links(g.B) / 8;
 }
-const PROTO = { size: 0.6, diet: 0.02, tpref: 0, litter: 0.2, terr: 0, learn: 0.1 };
+const PROTO = { size: 0.6, diet: 0.02, tpref: 0, litter: 0.2, terr: 0, learn: 0.1, depth: 0.1, care: 0.05 };
 const PROTO_SEGS = [S_BODY, S_FIN];
 const PPROTO = { grow: 0.6, tough: 0, spread: 0.4, tpref: 0, landTol: 0 };
 
@@ -271,6 +271,7 @@ const EPI = {
   warm: ['thermophila', 'calida', 'aestiva', 'tepida'], cold: ['cryophila', 'glacialis', 'hiemalis', 'frigida', 'borealis'],
   brood: ['fecunda', 'prolifera', 'multipara', 'fertilis'], graze: ['pascens', 'herbivora', 'mitis', 'placida'],
   land: ['terrestris', 'ambulans', 'pedata', 'arenicola', 'litoralis'], sea: ['aquatica', 'marina', 'pelagica', 'undosa'],
+  deep: ['abyssalis', 'profunda', 'bathyalis', 'tenebrosa'], care: ['materna', 'nutrix', 'custos', 'pia'],
   learn: ['docilis', 'discens', 'memor', 'sollers'], noct: ['nocturna', 'noctivaga', 'umbratica', 'lucifuga'],
   brain: ['callida', 'astuta', 'sagax', 'prudens', 'cogitans'], seg: ['segmentata', 'multiplex', 'catenata', 'longa', 'annulata'],
   fat: ['obesa', 'pinguis', 'crassa', 'adiposa'], feel: ['antennata', 'tentans', 'palpans', 'cornuta'],
@@ -281,7 +282,7 @@ const PHRASE = {
   pred: 'turning toward predation', armor: 'growing a protective shell', spine: 'growing defensive spines',
   warm: 'adapted to warmer water', cold: 'adapted to colder water', brood: 'producing larger broods', graze: 'returning to grazing',
   land: 'moving onto land', sea: 'returning to the water', brain: 'with a more elaborate brain', seg: 'with a longer, segmented body',
-  fat: 'storing fat for lean times', learn: 'that learns from experience', noct: 'active by night', feel: 'sprouting feelers', plain: 'drifting apart genetically'
+  fat: 'storing fat for lean times', learn: 'that learns from experience', deep: 'adapted to the dark abyss', care: 'that guards its young', noct: 'active by night', feel: 'sprouting feelers', plain: 'drifting apart genetically'
 };
 
 const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
@@ -314,6 +315,8 @@ class Sim {
       const a = r() * TAU;
       this.vents.push({ x: 120 + r() * (W - 240), y: 120 + r() * (H - 240), vx: Math.cos(a) * 0.02, vy: Math.sin(a) * 0.02, p: 0.6 + r() * 0.8, ph: r() * TAU });
     }
+    // a black smoker in the abyss feeds bacterial mats that need no sunlight
+    this.vents[3] = { x: this.deepSpot.x, y: this.deepSpot.y, vx: 0, vy: 0, p: 1.3, ph: 0, deep: true };
     this.nextCatastrophe = 45000 + Math.floor(r() * 40000);
     this.updateFert();
     for (let i = 0; i < 450; i++) {
@@ -347,8 +350,18 @@ class Sim {
     const sorted = Array.from(h).sort((a, b) => a - b);
     this.seaFinal = sorted[Math.floor(sorted.length * 0.7)];
     this.seaStart = 1.12;
+    this.deepLevel = sorted[Math.floor(sorted.length * 0.2)];
+    this.deep = new Uint8Array(TW * TH);
+    let di = -1;
+    for (let i = 0; i < h.length; i++) {
+      if (h[i] <= this.deepLevel) this.deep[i] = 1;
+      const x = i % TW, y = (i / TW) | 0;
+      if (x > 5 && x < TW - 6 && y > 5 && y < TH - 6 && (di < 0 || h[i] < h[di])) di = i;
+    }
+    this.deepSpot = { x: ((di % TW) + 0.5) * TC, y: (((di / TW) | 0) + 0.5) * TC };
   }
   tcell(x, y) { return clamp((y / TC) | 0, 0, TH - 1) * TW + clamp((x / TC) | 0, 0, TW - 1); }
+  isDeep(x, y) { return this.deep[this.tcell(x, y)] === 1; }
   isLand(x, y) { return this.height[this.tcell(x, y)] > this.seaLevel; }
   landFrac() { let n = 0; for (const v of this.height) if (v > this.seaLevel) n++; return n / this.height.length; }
   updateFert() {
@@ -392,7 +405,7 @@ class Sim {
 
   makeSpecies(parent, g) {
     const f = {}; for (const k of GK) f[k] = g[k];
-    const sp = { id: this.spid++, parent, founder: f, fSegs: g.segs.slice(), fB: cloneBrain(g.B), born: this.t, extinct: null, pop: 0, peak: 0, recognized: false, hue: 28, name: null, genus: null, mean: this.meanOf([g]), rep: g, anc: null, packs: 0, alarmT: 0, alarmS: 0, calmT: 0, calmS: 0, att: 0, esc: 0, dayEat: 0, nightEat: 0 };
+    const sp = { id: this.spid++, parent, founder: f, fSegs: g.segs.slice(), fB: cloneBrain(g.B), born: this.t, extinct: null, pop: 0, peak: 0, recognized: false, hue: 28, name: null, genus: null, mean: this.meanOf([g]), rep: g, anc: null, packs: 0, alarmT: 0, alarmS: 0, calmT: 0, calmS: 0, att: 0, esc: 0, dayEat: 0, nightEat: 0, share: 0 };
     if (parent) { const sgn = this.rng() < 0.5 ? -1 : 1; sp.hue = (parent.hue + sgn * (22 + this.rng() * 50) + 360) % 360; }
     this.active.add(sp);
     return sp;
@@ -446,7 +459,7 @@ class Sim {
     c.rew = 0; c.learned = 0; c.intake = 0;
     c.mem = new Float32Array(c.neurons);
     c.upkeep = K * (0.3 + 0.14 * Math.pow(c.mass, 1.3) + 0.06 * n[S_FIN] + 0.07 * n[S_LEG] + 0.12 * n[S_EYE] + 0.05 * n[S_JAW] + 0.09 * n[S_SHELL] + 0.05 * n[S_SPINE] + 0.03 * n[S_FAT] + 0.05 * n[S_FEEL] + 0.03 * n[S_BODY]
-      + 0.08 * g.litter + 0.1 * g.terr + 0.0025 * c.links + 0.005 * c.neurons + 0.03 * g.learn);
+      + 0.08 * g.litter + 0.1 * g.terr + 0.0025 * c.links + 0.005 * c.neurons + 0.03 * g.learn + 0.05 * g.care + 0.04 * g.depth);
     c.moveK = K * 0.8 * (0.4 + 0.5 * c.mass);
     c.bite = 2 + c.mass * 1.0 + c.attack * 1.5;
     c.body = 10 * c.mass;
@@ -551,6 +564,7 @@ class Sim {
     if (this.climateHold > 0) this.climateHold--;
     this.climate += (this.climateTarget - this.climate) * (this.climateHold > 0 ? 0.0015 : 0.0005);
     for (const v of this.vents) {
+      if (v.deep) continue;
       v.x += v.vx; v.y += v.vy;
       if (v.x < 90 || v.x > W - 90) v.vx *= -1;
       if (v.y < 90 || v.y > H - 90) v.vy *= -1;
@@ -618,7 +632,7 @@ class Sim {
     const td = g.tpref - this.tempAt(p.y);
     const tf = Math.max(0, 1 - td * td * 1.5);
     const hab = land ? 0.15 + 0.85 * g.landTol : 1 - 0.5 * g.landTol;
-    const gross = 0.12 * g.grow * this.fert[ti] * tf * hab * (1 - 0.45 * g.tough) * (0.6 + 0.4 * this._light) / (1 + crowd / 20);
+    const gross = 0.12 * g.grow * this.fert[ti] * tf * hab * (1 - 0.45 * g.tough) * (this.deep[ti] ? 0.45 : 0.6 + 0.4 * this._light) / (1 + crowd / 20);
     this.cumO += gross;
     p.e += gross - (0.004 + 0.013 * g.grow + 0.012 * g.tough + 0.004 * g.spread + 0.004 * g.landTol);
     if (p.e > 14) p.e = 14;
@@ -699,11 +713,12 @@ class Sim {
     const ready = this.isReady(c);
     if (ready) c.ready++; else c.ready = 0;
     const L = this._light === undefined ? 1 : this._light;
-    const R = 10 + 140 * Math.min(1, c.eyeS * (0.5 + 0.5 * L) + c.feelS) + c.r, R2 = R * R;
+    const inDeep = this.deep[this.tcell(c.x, c.y)] === 1;
+    const R = 10 + 140 * Math.min(1, c.eyeS * (inDeep ? 0.3 : 0.5 + 0.5 * L) + c.feelS) + c.r, R2 = R * R;
     const x0 = clamp(((c.x - R) / CELL) | 0, 0, GW - 1), x1 = clamp(((c.x + R) / CELL) | 0, 0, GW - 1);
     const y0 = clamp(((c.y - R) / CELL) | 0, 0, GH - 1), y1 = clamp(((c.y + R) / CELL) | 0, 0, GH - 1);
     let bf = null, bfd = R2, bfs = Infinity, bfMeat = false;
-    let prey = null, bdp = R2, thr = null, bdt = R2;
+    let prey = null, bdp = R2 * 4, bdpReal = R2, thr = null, bdt = R2;
     let kin = null, bdk = R2, mate = null, bdm = R2, sigk = null, bds = R2, kinN = 0, kinSig = 0, sx = 0, sy = 0;
     const canHunt = g.diet > 0.22 && c.e < c.cap * 0.8 && c.cool <= 0;
     const pEff = 1 - Math.pow(g.diet, 1.5), mEff = 0.2 + 0.8 * Math.pow(g.diet, 0.8);
@@ -715,7 +730,7 @@ class Sim {
           const p = pl[j]; if (p.dead) continue;
           const dx = p.x - c.x, dy = p.y - c.y, d2 = dx * dx + dy * dy;
           if (d2 > R2) continue;
-          const gain = Math.min(p.e - 1, c.bite) * pEff * (1 - p.g.tough * 0.5);
+          const gain = Math.min(p.e - 1, c.bite) * pEff * (1 - p.g.tough * 0.75 * (1 - c.attack));
           if (gain < 0.3) continue;
           const sc = d2 / (gain * gain);
           if (sc < bfs) { bfs = sc; bfd = d2; bf = p; bfMeat = false; }
@@ -740,7 +755,7 @@ class Sim {
         if (d2 > lim) continue;
         const rr = c.r + o.r;
         if (d2 < rr * rr && d2 > 0.0001) { const d = Math.sqrt(d2); sx -= dx / d; sy -= dy / d; }
-        if (o.sp === c.sp) {
+        if (o.sp === c.sp || ((o.sp.parent === c.sp || c.sp.parent === o.sp) && (o.sp.pop < 6 || c.sp.pop < 6))) {
           if (d2 > R2) continue;
           kinN++; if (o.sig > 0) { kinSig++; if (d2 < bds) { bds = d2; sigk = o; } }
           if (d2 < bdk) { bdk = d2; kin = o; }
@@ -748,7 +763,7 @@ class Sim {
           continue;
         }
         if (o.g.diet > 0.22 && c.r < o.r * 1.2 && d2 < bdt && d2 <= R2) { bdt = d2; thr = o; }
-        if (canHunt && o.r < c.r * 1.2 && d2 < bdp) { bdp = d2; prey = o; }
+        if (canHunt && o.r < c.r * 1.2) { const d2s = d2 / (0.6 + 2 * o.sp.share); if (d2s < bdp) { bdp = d2s; bdpReal = d2; prey = o; } }
       }
     }
     // senses
@@ -757,7 +772,7 @@ class Sim {
     const px = (d2) => 1 - Math.min(1, Math.sqrt(d2) / R);
     I[0] = 1;
     if (bf) { const p = px(bfd); I[1] = rel(bf.x, bf.y) * (0.3 + 0.7 * p); I[2] = p; } else { I[1] = 0; I[2] = 0; }
-    if (prey) { const p = px(bdp); I[3] = rel(prey.x, prey.y) * (0.3 + 0.7 * p); I[4] = p; } else { I[3] = 0; I[4] = 0; }
+    if (prey) { const p = px(bdpReal); I[3] = rel(prey.x, prey.y) * (0.3 + 0.7 * p); I[4] = p; } else { I[3] = 0; I[4] = 0; }
     if (thr) { const p = px(bdt); I[5] = rel(thr.x, thr.y) * (0.3 + 0.7 * p); I[6] = p; } else { I[5] = 0; I[6] = 0; }
     if (kin) { I[7] = rel(kin.x, kin.y); I[8] = px(bdk); } else { I[7] = 0; I[8] = 0; }
     if (mate) { I[9] = rel(mate.x, mate.y); I[10] = px(bdm); } else { I[9] = 0; I[10] = 0; }
@@ -773,6 +788,8 @@ class Sim {
     if (sigk) { I[16] = rel(sigk.x, sigk.y); } else I[16] = 0;
     I[17] = kinN ? kinSig / kinN : 0;
     I[18] = L;
+    const par = c.par && !c.par.dead && c.age < c.mature ? c.par : null;
+    if (par) { const dx = par.x - c.x, dy = par.y - c.y, d = Math.hypot(dx, dy); I[19] = rel(par.x, par.y); I[20] = 1 - Math.min(1, d / 120); } else { I[19] = 0; I[20] = 0; }
     // brain (the animal's own copy, which it can tune by experience)
     const B = c.W;
     let o0 = 0, o1 = 0, o2 = 0;
@@ -821,7 +838,7 @@ class Sim {
     c.a = wrapA(c.a + turnOut * c.turn);
     const vmax = hereLand ? c.vLand * (0.3 + 0.7 * g.terr) : c.vWater * (1 - 0.3 * g.terr * g.terr);
     let want = vmax * (0.12 + 0.88 * thrust);
-    if (prey && bdp < (c.r * 4) * (c.r * 4)) want *= 1.3;
+    if (prey && bdpReal < (c.r * 4) * (c.r * 4)) want *= 1.3;
     c.v += (want - c.v) * 0.2;
     c.x += Math.cos(c.a) * c.v + sx * 0.4; c.y += Math.sin(c.a) * c.v + sy * 0.4;
     if (c.x < c.r) { c.x = c.r; c.a = Math.PI - c.a; } else if (c.x > W - c.r) { c.x = W - c.r; c.a = Math.PI - c.a; }
@@ -832,7 +849,7 @@ class Sim {
       if (ex * ex + ey * ey < rr * rr) {
         let gain;
         if (bfMeat) { bf.dead = true; gain = bf.e * mEff; }
-        else { const take = Math.max(0, Math.min(bf.e - 1, c.bite)); bf.e -= take; gain = take * pEff * (1 - bf.g.tough * 0.5); }
+        else { const take = Math.max(0, Math.min(bf.e - 1, c.bite)); bf.e -= take; gain = take * pEff * (1 - bf.g.tough * 0.75 * (1 - c.attack)); }
         c.e += gain; c.intake += gain; c.rew += Math.min(1, gain / 6);
         if (L < 0.3) c.sp.nightEat++; else c.sp.dayEat++;
         c.ate = 6; c.ecool = 4;
@@ -849,7 +866,8 @@ class Sim {
         const cover = prey.r < 5 && this.pgrid[this.cellOf(prey.x, prey.y)].length >= 12 ? 0.35 : 1;
         if (!prey.hit || this.t - prey.hit.t > 30) prey.hit = { t: this.t, sp: c.sp, ids: [c.id] };
         else if (prey.hit.sp === c.sp && prey.hit.ids.indexOf(c.id) < 0) { prey.hit.ids.push(c.id); prey.hit.t = this.t; }
-        if (rng() < p * cover) {
+        const guard = prey.par && !prey.par.dead && prey.age < prey.mature && Math.hypot(prey.par.x - prey.x, prey.par.y - prey.y) < 45 ? 1 - 0.6 * prey.par.g.care : 1;
+        if (rng() < p * cover * guard) {
           prey.dead = true;
           const gain = (Math.max(0, prey.e) * 0.9 + prey.body) * mEff;
           c.e += gain; c.intake += gain; c.rew += 1; prey.sp.att++;
@@ -867,6 +885,7 @@ class Sim {
     const cap = 0.8 + 5.2 * Math.pow(this.oxygen, 1.5), over = Math.max(0, c.mass - cap);
     let drain = c.upkeep + c.moveK * c.v * c.v + K * 1.1 * td * td * (0.6 + 0.15 * c.mass) + K * 6 * over * over;
     drain += hereLand ? K * 1.2 * (1 - g.terr) * (1 - g.terr) : K * 1.0 * g.terr * g.terr;
+    if (!hereLand) drain += inDeep ? K * 1.4 * (1 - g.depth) * (1 - g.depth) : K * 0.5 * g.depth * g.depth;
     if (c.sig) drain += K * 0.03;
     c.e -= drain;
     if (c.e <= 0 || c.age > c.maxAge) {
@@ -880,10 +899,14 @@ class Sim {
     // reproduction: mate when a ready partner is touching, or go it alone after waiting too long
     if (!ready || this.creatures.length + births.length >= MAXC) return;
     let partner = null;
-    if (mate && !mate.dead) { const ex = mate.x - c.x, ey = mate.y - c.y, rr = c.r + mate.r + 4; if (ex * ex + ey * ey < rr * rr) partner = mate; }
+    if (mate && !mate.dead) {
+      const ex = mate.x - c.x, ey = mate.y - c.y, rr = c.r + mate.r + 4;
+      // animals that have drifted too far apart can no longer produce offspring together
+      if (ex * ex + ey * ey < rr * rr && this.dist(g, g.segs, g.B, mate.g, mate.g.segs, mate.g.B) < 0.2) partner = mate;
+    }
     if (!partner && c.ready < 350) return;
     const n = 1 + Math.floor(g.litter * 2.999);
-    let give = c.e * (partner ? 0.35 : 0.5); c.e -= give;
+    let give = c.e * ((partner ? 0.35 : 0.5) + 0.2 * g.care); c.e -= give;
     if (partner) { const pg = partner.e * 0.3; partner.e -= pg; give += pg; partner.rcool = 60; partner.ready = 0; }
     c.rcool = 60; c.ready = 0;
     const each = give * 0.9 / n;
@@ -894,7 +917,9 @@ class Sim {
       if (ce < 8) continue;
       let sp = c.sp;
       if (this.dist(cg, cg.segs, cg.B, sp.founder, sp.fSegs, sp.fB) > SPECIATE) sp = this.makeSpecies(sp, cg);
-      births.push(this.makeCreature(cg, clamp(c.x + this.gauss() * 4, 3, W - 3), clamp(c.y + this.gauss() * 4, 3, H - 3), sp, ce, c.gen + 1));
+      const kid = this.makeCreature(cg, clamp(c.x + this.gauss() * 4, 3, W - 3), clamp(c.y + this.gauss() * 4, 3, H - 3), sp, ce, c.gen + 1);
+      if (g.care > 0.15) kid.par = c;
+      births.push(kid);
     }
   }
 
@@ -925,18 +950,20 @@ class Sim {
         let near = 0; for (const c of sample) { for (const o of this.cgrid[this.cellOf(c.x, c.y)]) if (o.sp === sp && o !== c && Math.abs(o.x - c.x) < 30 && Math.abs(o.y - c.y) < 30) near++; }
         sp.clump = near / sample.length;
         sp.onLand = sample.filter(c => this.isLand(c.x, c.y)).length / sample.length;
+        sp.inDeep = sample.filter(c => this.isDeep(c.x, c.y) && !this.isLand(c.x, c.y)).length / sample.length;
         sp.mean.eff = sample.reduce((a, c) => a + (c.intake / Math.max(60, c.age)) / c.upkeep, 0) / sample.length;
         sp.escape = sp.att >= 5 ? sp.esc / sp.att : null;
         sp.att *= 0.9; sp.esc *= 0.9; sp.dayEat *= 0.95; sp.nightEat *= 0.95;
         sp.kinPull = sample.reduce((a, c) => a + c.g.B.wd[7 * NO], 0) / sample.length;
       }
       if (sp.pop > sp.peak) sp.peak = sp.pop;
-      if (!sp.recognized && sp.pop >= 10) this.recognize(sp);
+      sp.share = sp.pop / Math.max(1, this.creatures.length);
+      if (!sp.recognized && sp.pop >= 6) this.recognize(sp);
     }
     // density-dependent disease
     const total = this.creatures.length;
     for (const sp of this.active) {
-      if (sp.recognized && sp.pop > 25 && sp.pop > total * 0.7 && this.t - (sp.plague || -1e9) > 15000 && this.rng() < 0.002) {
+      if (sp.recognized && sp.pop > 30 && sp.pop > total * 0.5 && this.t - (sp.plague || -1e9) > 10000 && this.rng() < 0.003) {
         sp.plague = this.t;
         let killed = 0;
         for (const c of this.creatures) if (c.sp === sp && this.rng() < 0.45) { c.dead = true; killed++; }
@@ -959,7 +986,7 @@ class Sim {
     this.plantStats = { n: this.plants.length, tough: pt / np, landTol: pl / np, onLand: landPlants };
     // milestones
     const feats = {};
-    const ERA = { eyes: 'Dawn of Sight', swim: 'Age of Swimmers', oxy: 'Great Oxygenation', multi: 'Multicellular Bloom', segments: 'Age of Segments', pred: 'Age of Predators', arms: 'Arms Race', giant: 'Age of Giants', landplants: 'Greening of the Land', landanimals: 'Conquest of Land', brain: 'Age of Brains', herds: 'Social Age', packs: 'Age of Pack Hunters', learning: 'Age of Learning', mind: 'Age of Minds' };
+    const ERA = { eyes: 'Dawn of Sight', swim: 'Age of Swimmers', oxy: 'Great Oxygenation', multi: 'Multicellular Bloom', segments: 'Age of Segments', pred: 'Age of Predators', arms: 'Arms Race', giant: 'Age of Giants', landplants: 'Greening of the Land', landanimals: 'Conquest of Land', brain: 'Age of Brains', herds: 'Social Age', packs: 'Age of Pack Hunters', learning: 'Age of Learning', deep: 'Age of the Abyss', care: 'Age of Families', mind: 'Age of Minds' };
     const hit = (k, text, sp) => {
       feats[k] = true;
       if (this.milestones[k]) return;
@@ -987,6 +1014,8 @@ class Sim {
       if (m.terr > 0.45 && n[S_LEG] >= 1 && sp.onLand > 0.5 && sp.pop >= 12) hit('landanimals', 'Conquest of land: ' + sp.name + ' walks out of the sea on ' + Math.round(n[S_LEG] * 2) + ' legs.', sp);
       if (sp.clump > 3 && sp.pop >= 15 && sp.kinPull > 1.0) hit('herds', 'Herds: ' + sp.name + ' moves in tight groups.', sp);
       if (sp.packs >= 15 && m.diet > 0.5) hit('packs', 'Pack hunting: ' + sp.name + ' brings down prey together.', sp);
+      if (m.depth > 0.55 && sp.inDeep > 0.5 && sp.pop >= 10) hit('deep', 'The abyss is colonized: ' + sp.name + ' lives in the permanent dark of the deep sea.', sp);
+      if (m.care > 0.45 && sp.pop >= 12) hit('care', 'Parental care: ' + sp.name + ' raises and guards its young.', sp);
       if (m.learn > 0.4 && sp.pop >= 15) hit('learning', 'Learning evolves: ' + sp.name + ' adjusts its behavior from experience within its own lifetime.', sp);
       if (sp.nightEat + sp.dayEat > 40 && sp.nightEat > 0.62 * (sp.nightEat + sp.dayEat)) hit('nocturnal', 'Night life: ' + sp.name + ' does most of its feeding in the dark.', sp);
       if (sp.alarmT > 150 && sp.alarmS / sp.alarmT > 0.5 && sp.calmT > 150 && sp.calmS / sp.calmT < 0.2) hit('alarm', 'Alarm calls: ' + sp.name + ' flashes a warning to its kin when danger appears.', sp);
@@ -1001,7 +1030,7 @@ class Sim {
     }
     const n = this.creatures.length || 1;
     let spc = 0; for (const sp of this.active) if (sp.recognized) spc++;
-    this.history.push({ t: this.t, pop: this.creatures.length, spc, size: tot.mass / n, diet: tot.diet / n, armor: tot.armor / n, temp: this.climate, plants: this.plants.length, oxy: this.oxygen, links: tot.links / n, neurons: tot.neurons / n, segs: tot.segs / n, land: onLand / n, cx: top ? top.mean.cx : 0, learn: this.creatures.reduce((a, c) => a + c.g.learn, 0) / n });
+    this.history.push({ t: this.t, pop: this.creatures.length, spc, size: tot.mass / n, diet: tot.diet / n, armor: tot.armor / n, temp: this.climate, plants: this.plants.length, oxy: this.oxygen, links: tot.links / n, neurons: tot.neurons / n, segs: tot.segs / n, land: onLand / n, cx: top ? top.mean.cx : 0, learn: this.creatures.reduce((a, c) => a + c.g.learn, 0) / n, care: this.creatures.reduce((a, c) => a + c.g.care, 0) / n, deep: this.creatures.filter(c => this.isDeep(c.x, c.y) && !this.isLand(c.x, c.y)).length / n });
     if (this.history.length > 600) this.history = this.history.filter((_, i) => i % 2 === 0);
   }
 
@@ -1015,15 +1044,15 @@ class Sim {
       eyes: d(S_EYE) / 2, fast: (d(S_FIN) + d(S_LEG)) / 3, big: (m.mass - (p.mass || m.mass)) / 4, small: ((p.mass || m.mass) - m.mass) / 4,
       pred: (m.diet - p.diet) + d(S_JAW) / 4, armor: d(S_SHELL) / 2, spine: d(S_SPINE) / 2, warm: (m.tpref - p.tpref) / 2.4, cold: (p.tpref - m.tpref) / 2.4,
       brood: m.litter - p.litter, graze: p.diet - m.diet, land: (m.terr - p.terr) * 1.3, sea: (p.terr - m.terr) * 1.2, brain: (m.neurons - p.neurons) / 4,
-      seg: (m.segs - p.segs) / 4, fat: d(S_FAT) / 2, feel: d(S_FEEL) / 2, learn: (m.learn - p.learn) * 1.2
+      seg: (m.segs - p.segs) / 4, fat: d(S_FAT) / 2, feel: d(S_FEEL) / 2, learn: (m.learn - p.learn) * 1.2, deep: (m.depth - p.depth) * 1.3, care: (m.care - p.care) * 1.2
     };
     const n = m.count;
-    const ok = { eyes: n[S_EYE] >= 1, fast: n[S_FIN] + n[S_LEG] >= 2, big: m.mass > 1.5, small: true, pred: m.diet > 0.35, armor: n[S_SHELL] >= 1, spine: n[S_SPINE] >= 1, warm: m.tpref > 0.3, cold: m.tpref < -0.3, brood: m.litter > 0.5, graze: p.diet > 0.3, land: m.terr > 0.35, sea: p.terr > 0.35, brain: m.neurons >= 2, seg: m.segs >= 4, fat: n[S_FAT] >= 1, feel: n[S_FEEL] >= 1, learn: m.learn > 0.3 };
+    const ok = { eyes: n[S_EYE] >= 1, fast: n[S_FIN] + n[S_LEG] >= 2, big: m.mass > 1.5, small: true, pred: m.diet > 0.35, armor: n[S_SHELL] >= 1, spine: n[S_SPINE] >= 1, warm: m.tpref > 0.3, cold: m.tpref < -0.3, brood: m.litter > 0.5, graze: p.diet > 0.3, land: m.terr > 0.35, sea: p.terr > 0.35, brain: m.neurons >= 2, seg: m.segs >= 4, fat: n[S_FAT] >= 1, feel: n[S_FEEL] >= 1, learn: m.learn > 0.3, deep: m.depth > 0.45, care: m.care > 0.35 };
     let best = 'plain', bs = 0.04;
     for (const k in score) if (ok[k] && score[k] > bs) { bs = score[k]; best = k; }
     if (!a) best = 'plain';
     let genus = a ? a.genus : null;
-    if (!a || Math.abs(m.diet - p.diet) > 0.25 || Math.abs((m.mass || 0) - (p.mass || 0)) > 1 || Math.abs(m.terr - p.terr) > 0.3 || Math.abs(m.segs - p.segs) > 1.5 || this.rng() < 0.18) genus = null;
+    if (!a || Math.abs((m.depth || 0) - (p.depth || 0)) > 0.35 || Math.abs(m.diet - p.diet) > 0.25 || Math.abs((m.mass || 0) - (p.mass || 0)) > 1 || Math.abs(m.terr - p.terr) > 0.3 || Math.abs(m.segs - p.segs) > 1.5 || this.rng() < 0.18) genus = null;
     const newGenus = () => {
       for (let i = 0; i < 40; i++) {
         const gname = GENUS_A[(this.rng() * GENUS_A.length) | 0] + GENUS_B[(this.rng() * GENUS_B.length) | 0];
@@ -1056,7 +1085,7 @@ class Sim {
     const ms = {};
     for (const k in this.milestones) { const m = this.milestones[k]; ms[k] = { t: m.t, sp: m.sp && keep.has(m.sp) ? m.sp.id : null }; }
     return {
-      v: 4, savedAt: Date.now(), seed: this.seed, s: this._s, t: this.t, nid: this.nid, spid: this.spid,
+      v: 5, savedAt: Date.now(), seed: this.seed, s: this._s, t: this.t, nid: this.nid, spid: this.spid,
       sps: [...keep].map(sp => { const p = near(sp); return { id: sp.id, p: p ? p.id : null, a: sp.anc ? sp.anc.id : null, f: sp.founder, fs: sp.fSegs, fB: bs(sp.fB), b: sp.born, x: sp.extinct, pop: sp.pop, pk: sp.peak, r: sp.recognized, h: sp.hue, n: sp.name, g: sp.genus, m: sp.mean, tr: sp.trait || null, pk2: sp.packs, pl: sp.plague || null, de: sp.dayEat, ne: sp.nightEat, rep: sp.extinct === null ? null : gs(sp.rep) }; }),
       act: [...this.active].map(sp => sp.id), rec: this.recognized.map(sp => sp.id),
       cr: this.creatures.map(c => ({ id: c.id, x: r2(c.x), y: r2(c.y), a: r2(c.a), g: gs(c.g), s: c.sp.id, e: r2(c.e), age: c.age, gen: c.gen, cool: c.cool, v: r2(c.v), ph: r2(c.ph), k: c.kills, ma: r2(c.maxAge), rc: c.rcool })),
@@ -1072,7 +1101,7 @@ class Sim {
   restore(o) {
     this._s = o.s; this.t = o.t; this.nid = o.nid; this.spid = o.spid;
     const byId = new Map();
-    for (const d of o.sps) byId.set(d.id, { id: d.id, parent: null, founder: d.f, fSegs: d.fs, fB: d.fB, born: d.b, extinct: d.x, pop: d.pop, peak: d.pk, recognized: d.r, hue: d.h, name: d.n, genus: d.g, mean: d.m, anc: null, trait: d.tr, rep: d.rep, packs: d.pk2 || 0, plague: d.pl, alarmT: 0, alarmS: 0, calmT: 0, calmS: 0, att: 0, esc: 0, dayEat: d.de || 0, nightEat: d.ne || 0 });
+    for (const d of o.sps) byId.set(d.id, { id: d.id, parent: null, founder: d.f, fSegs: d.fs, fB: d.fB, born: d.b, extinct: d.x, pop: d.pop, peak: d.pk, recognized: d.r, hue: d.h, name: d.n, genus: d.g, mean: d.m, anc: null, trait: d.tr, rep: d.rep, packs: d.pk2 || 0, plague: d.pl, alarmT: 0, alarmS: 0, calmT: 0, calmS: 0, att: 0, esc: 0, dayEat: d.de || 0, nightEat: d.ne || 0, share: 0 });
     for (const d of o.sps) { const sp = byId.get(d.id); sp.parent = byId.get(d.p) || null; sp.anc = byId.get(d.a) || null; }
     for (const id of o.act) { const sp = byId.get(id); if (sp) this.active.add(sp); }
     for (const id of o.rec) { const sp = byId.get(id); if (sp) this.recognized.push(sp); }
@@ -1106,7 +1135,7 @@ function fmtSpan(y) {
   return Math.round(y / 1e3) + ' thousand years';
 }
 
-const api = { Sim, W, H, YPT, DAY, SEASON, TC, TW, TH, GENES, NI, NO, MAXH, SEG, NSEG, S_BODY, S_FIN, S_LEG, S_EYE, S_JAW, S_SHELL, S_SPINE, S_FAT, S_FEEL, IN_LABELS, OUT_LABELS, SEED_LINKS, links, hiddenUsed, activeNeurons, memoryNeurons, segCounts, complexity, fmtSpan };
+const api = { Sim, S_DEEP: 1, W, H, YPT, DAY, SEASON, TC, TW, TH, GENES, NI, NO, MAXH, SEG, NSEG, S_BODY, S_FIN, S_LEG, S_EYE, S_JAW, S_SHELL, S_SPINE, S_FAT, S_FEEL, IN_LABELS, OUT_LABELS, SEED_LINKS, links, hiddenUsed, activeNeurons, memoryNeurons, segCounts, complexity, fmtSpan };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Evo = api;
 })(typeof window !== 'undefined' ? window : this);
 
@@ -1120,12 +1149,12 @@ const UM = 25; // micrometres per world unit
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const $ = id => document.getElementById(id);
 
-const SAVE_KEY = 'genesis-pool-save-v4';
+const SAVE_KEY = 'genesis-pool-save-v5';
 const CATCH_RATE = 90, CATCH_MAX = 12000; // ticks per real second at 1x, and the catch-up cap
 let storageOK = true, saved = null;
 try { const raw = localStorage.getItem(SAVE_KEY); saved = raw ? JSON.parse(raw) : null; } catch (e) { storageOK = false; saved = null; }
 let sim = null;
-if (saved && saved.v === 4) { try { sim = new Sim(saved.seed, saved); } catch (e) { sim = null; saved = null; } }
+if (saved && saved.v === 5) { try { sim = new Sim(saved.seed, saved); } catch (e) { sim = null; saved = null; } }
 const isNewWorld = !sim;
 if (!sim) sim = new Sim((Math.random() * 1e9) | 0);
 const SPEEDS = [{ k: '½×', s: 0.75 }, { k: '1×', s: 1.5 }, { k: '4×', s: 6 }, { k: '12×', s: 18 }];
@@ -1160,6 +1189,8 @@ function traitLine(m) {
   if (m.terr > 0.45 && n[S_LEG] >= 0.8) t.push('walks on land'); else if (n[S_FIN] >= 1.5) t.push('swimmer');
   if (n[S_SHELL] >= 0.8) t.push('shelled');
   if (n[S_SPINE] >= 0.8) t.push('spined');
+  if (m.depth > 0.5) t.push('deep-sea');
+  if (m.care > 0.4) t.push('cares for young');
   if (m.neurons >= 1.5) t.push(Math.round(m.neurons) + '-neuron brain');
   if (m.mass) t.push(bodyMM(m.mass).toFixed(2) + ' mm');
   return t.join(' · ');
@@ -1298,7 +1329,8 @@ function buildTerrainImage() {
       d[o + 3] = 255;
     } else {
       const depth = sl - v, a = depth < 0.12 ? 1 - depth / 0.12 : 0;
-      d[o] = 70; d[o + 1] = 150; d[o + 2] = 150; d[o + 3] = Math.round(a * a * 80);
+      if (v <= sim.deepLevel) { const k = Math.min(1, (sim.deepLevel - v) / 0.04); d[o] = 2; d[o + 1] = 8; d[o + 2] = 24; d[o + 3] = Math.round(70 + 80 * k); }
+      else { d[o] = 70; d[o + 1] = 150; d[o + 2] = 150; d[o + 3] = Math.round(a * a * 80); }
     }
   }
   tctx.putImageData(img, 0, 0);
@@ -1332,8 +1364,8 @@ function draw() {
   for (const v of sim.vents) {
     const rad = 95 + v.p * 45;
     const rg = ctx.createRadialGradient(v.x, v.y, 0, v.x, v.y, rad);
-    rg.addColorStop(0, `rgba(242,184,100,${0.10 + v.p * 0.05})`);
-    rg.addColorStop(1, 'rgba(242,184,100,0)');
+    rg.addColorStop(0, v.deep ? 'rgba(140,220,210,.22)' : `rgba(242,184,100,${0.10 + v.p * 0.05})`);
+    rg.addColorStop(1, v.deep ? 'rgba(140,220,210,0)' : 'rgba(242,184,100,0)');
     ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(v.x, v.y, rad, 0, TAU); ctx.fill();
   }
 
@@ -1361,6 +1393,12 @@ function draw() {
   }
   const lightNow = sim.light();
   if (lightNow < 1) { ctx.fillStyle = `rgba(4,10,28,${(1 - lightNow) * 0.5})`; ctx.fillRect(0, 0, W, H); }
+
+  // young animals following a parent
+  ctx.strokeStyle = 'rgba(243,240,228,.28)'; ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  for (const c of sim.creatures) { const p = c.par; if (p && !p.dead && c.age < c.mature) { const dx = p.x - c.x, dy = p.y - c.y; if (dx * dx + dy * dy < 3600) { ctx.moveTo(c.x, c.y); ctx.lineTo(p.x, p.y); } } }
+  ctx.stroke();
 
   // organisms
   const vx0 = cam.x - cw / 2 / s - 30, vx1 = cam.x + cw / 2 / s + 30, vy0 = cam.y - ch / 2 / s - 30, vy1 = cam.y + ch / 2 / s + 30;
@@ -1403,6 +1441,8 @@ function draw() {
   ctx.fillStyle = 'rgba(160,190,200,.7)';
   ctx.textBaseline = 'top';
   ctx.fillText('COLD NORTH  ' + tempC(sim.tempAt(0)).toFixed(0) + '°C', Math.max(left, 0) + 12, Math.max(top, 0) + 10);
+  { const dsx = ox + sim.deepSpot.x * s, dsy = oy + sim.deepSpot.y * s;
+    if (dsx > 0 && dsx < cw && dsy > 0 && dsy < ch) { ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(140,220,210,.6)'; ctx.fillText('THE DEEP', dsx, dsy + 18); } }
   ctx.textAlign = 'center'; ctx.fillStyle = lightNow < 0.3 ? 'rgba(170,190,240,.85)' : 'rgba(242,212,150,.8)';
   ctx.fillText(lightNow < 0.3 ? 'NIGHT' : lightNow < 0.7 ? (Math.cos(2 * Math.PI * sim.t / DAY) > 0 ? 'DAWN' : 'DUSK') : 'DAY', cw / 2, Math.max(top, 0) + 10);
   ctx.textAlign = 'left';
@@ -1473,6 +1513,9 @@ function renderInspector(force) {
     ['Habitat', g.terr > 0.55 ? 'Land' : g.terr > 0.3 ? 'Shoreline' : 'Water'],
     ['Prefers', tempC(g.tpref).toFixed(0) + '°C'],
     ['Offspring', String(1 + Math.floor(g.litter * 2.999)) + ' per mating'],
+    ['Depth', g.depth > 0.55 ? 'Lives in the abyss' : g.depth > 0.3 ? 'Tolerates the deep' : 'Shallows only'],
+    ['Parenting', g.care > 0.45 ? 'Raises and guards its young' : g.care > 0.15 ? 'Some care' : 'None'],
+    ...(c.par && !c.par.dead && c.age < c.mature ? [['Status', 'Young, following its parent']] : []),
     ['Learns', g.learn > 0.5 ? 'Quickly' : g.learn > 0.2 ? 'Somewhat' : g.learn > 0.03 ? 'Barely' : 'No'],
     ['Complexity', complexity(g).toFixed(1)]
   ];
@@ -1594,6 +1637,8 @@ const VITALS = [
   { k: 'Top complexity', col: '#F3F0E4', get: h => h.cx || 0, fmt: v => v.toFixed(1), lo: 0 },
   { k: 'Body sections', col: '#9CC7A6', get: h => h.segs || 0, fmt: v => v.toFixed(1), lo: 0 },
   { k: 'Inner neurons', col: '#C3A6EE', get: h => h.neurons || 0, fmt: v => v.toFixed(1), lo: 0 },
+  { k: 'Parental care', col: '#E8B4C8', get: h => h.care || 0, fmt: v => Math.round(v * 100) + '%', lo: 0, hi: 1 },
+  { k: 'In the deep', col: '#5FA8C8', get: h => h.deep || 0, fmt: v => Math.round(v * 100) + '%', lo: 0, hi: 1 },
   { k: 'Learning', col: '#F3F0E4', get: h => h.learn || 0, fmt: v => Math.round(v * 100) + '%', lo: 0, hi: 1 },
   { k: 'Meat in diet', col: '#E57A62', get: h => h.diet, fmt: v => Math.round(v * 100) + '%', lo: 0, hi: 1 },
   { k: 'Living on land', col: '#C8B478', get: h => h.land || 0, fmt: v => Math.round(v * 100) + '%', lo: 0, hi: 1 },
