@@ -99,6 +99,8 @@ section h2{font-family:var(--serif);font-weight:400;font-size:17px;margin:0;text
 .vital b{font-family:var(--mono);font-weight:400;font-size:12.5px;text-align:right;font-variant-numeric:tabular-nums}
 
 /* tree */
+#brainsChart{width:100%;height:190px;display:block;background:var(--panel);border-radius:10px;border:1px solid var(--rule)}
+.note{margin:6px 0 0;color:var(--dim);font-size:12px;line-height:1.45}
 #tree{width:100%;height:210px;display:block;background:var(--panel);border-radius:10px;border:1px solid var(--rule)}
 
 /* chronicle */
@@ -145,7 +147,7 @@ section h2{font-family:var(--serif);font-weight:400;font-size:17px;margin:0;text
       <div><dt>Organisms</dt><dd id="sPop">0</dd></div>
       <div><dt>Species</dt><dd id="sSpc">0</dd></div>
       <div><dt>Oxygen</dt><dd id="sOxy">0%</dd></div>
-      <div><dt>Generations</dt><dd id="sGen">0</dd></div>
+      <div><dt>Season</dt><dd id="sSeason">-</dd></div>
       <div><dt>Top complexity</dt><dd id="sCx">0</dd></div>
     </dl>
   </header>
@@ -186,6 +188,11 @@ section h2{font-family:var(--serif);font-weight:400;font-size:17px;margin:0;text
         <div class="vitals" id="vitals"></div>
       </section>
       <section>
+        <div class="sec-head"><h2>Do bigger brains help?</h2><small>one dot per species</small></div>
+        <canvas id="brainsChart"></canvas>
+        <p class="note" id="brainsNote">Each dot is a living species. Farther right means more inner neurons; higher means it gathers more food for what it costs to stay alive. Bigger dots are bigger populations; ringed dots are species that learn.</p>
+      </section>
+      <section>
         <div class="sec-head"><h2>Tree of life</h2><small>time runs left to right</small></div>
         <canvas id="tree"></canvas>
       </section>
@@ -205,13 +212,14 @@ const GW = Math.ceil(W / CELL), GH = Math.ceil(H / CELL);
 const TW = Math.ceil(W / TC), TH = Math.ceil(H / TC);
 const MAXC = 420, MAXP = 1400, MAXMEAT = 400, K = 0.07;
 const YPT = 30000; // years per tick
+const DAY = 1800, SEASON = 14000;
 const TAU = Math.PI * 2;
 
 /* ---------- genome layout ---------- */
 // continuous genes; body parts come from the segment list
-const GENES = { size: [0.4, 3], diet: [0, 1], tpref: [-1.2, 1.2], litter: [0, 1], terr: [0, 1] };
+const GENES = { size: [0.4, 3], diet: [0, 1], tpref: [-1.2, 1.2], litter: [0, 1], terr: [0, 1], learn: [0, 1] };
 const GK = Object.keys(GENES);
-const DWT = { size: 1, diet: 1.5, tpref: 0.8, litter: 0.5, terr: 1.2 };
+const DWT = { size: 1, diet: 1.5, tpref: 0.8, litter: 0.5, terr: 1.2, learn: 0.5 };
 // segment types
 const SEG = ['body', 'fin', 'leg', 'eye', 'jaw', 'shell', 'spine', 'fat', 'feeler'];
 const S_BODY = 0, S_FIN = 1, S_LEG = 2, S_EYE = 3, S_JAW = 4, S_SHELL = 5, S_SPINE = 6, S_FAT = 7, S_FEEL = 8, NSEG = 9;
@@ -221,8 +229,8 @@ const PK = Object.keys(PGENES);
 const SPECIATE = 0.17;
 
 // brain: 18 senses -> growable hidden neurons with self-memory -> 3 outputs, plus direct links
-const NI = 18, NO = 3, MAXH = 16;
-const IN_LABELS = ['bias', 'food dir', 'food near', 'prey dir', 'prey near', 'threat dir', 'threat near', 'kin dir', 'kin near', 'mate dir', 'mate near', 'energy', 'comfort dir', 'bad ground', 'rhythm', 'noise', 'signal dir', 'signal level'];
+const NI = 19, NO = 3, MAXH = 16;
+const IN_LABELS = ['bias', 'food dir', 'food near', 'prey dir', 'prey near', 'threat dir', 'threat near', 'kin dir', 'kin near', 'mate dir', 'mate near', 'energy', 'comfort dir', 'bad ground', 'rhythm', 'noise', 'signal dir', 'signal level', 'daylight'];
 const OUT_LABELS = ['turn', 'speed', 'signal'];
 function seedBrain() {
   const wd = new Array(NI * NO).fill(0);
@@ -248,7 +256,7 @@ function complexity(g) {
   const c = segCounts(g.segs); let kinds = 0; for (let t = 1; t < NSEG; t++) if (c[t]) kinds++;
   return g.segs.length + kinds * 2 + activeNeurons(g.B) * 1.5 + memoryNeurons(g.B) + links(g.B) / 8;
 }
-const PROTO = { size: 0.6, diet: 0.02, tpref: 0, litter: 0.2, terr: 0 };
+const PROTO = { size: 0.6, diet: 0.02, tpref: 0, litter: 0.2, terr: 0, learn: 0.1 };
 const PROTO_SEGS = [S_BODY, S_FIN];
 const PPROTO = { grow: 0.6, tough: 0, spread: 0.4, tpref: 0, landTol: 0 };
 
@@ -263,6 +271,7 @@ const EPI = {
   warm: ['thermophila', 'calida', 'aestiva', 'tepida'], cold: ['cryophila', 'glacialis', 'hiemalis', 'frigida', 'borealis'],
   brood: ['fecunda', 'prolifera', 'multipara', 'fertilis'], graze: ['pascens', 'herbivora', 'mitis', 'placida'],
   land: ['terrestris', 'ambulans', 'pedata', 'arenicola', 'litoralis'], sea: ['aquatica', 'marina', 'pelagica', 'undosa'],
+  learn: ['docilis', 'discens', 'memor', 'sollers'], noct: ['nocturna', 'noctivaga', 'umbratica', 'lucifuga'],
   brain: ['callida', 'astuta', 'sagax', 'prudens', 'cogitans'], seg: ['segmentata', 'multiplex', 'catenata', 'longa', 'annulata'],
   fat: ['obesa', 'pinguis', 'crassa', 'adiposa'], feel: ['antennata', 'tentans', 'palpans', 'cornuta'],
   plain: ['vulgaris', 'simplex', 'communis', 'errans', 'vagans']
@@ -272,7 +281,7 @@ const PHRASE = {
   pred: 'turning toward predation', armor: 'growing a protective shell', spine: 'growing defensive spines',
   warm: 'adapted to warmer water', cold: 'adapted to colder water', brood: 'producing larger broods', graze: 'returning to grazing',
   land: 'moving onto land', sea: 'returning to the water', brain: 'with a more elaborate brain', seg: 'with a longer, segmented body',
-  fat: 'storing fat for lean times', feel: 'sprouting feelers', plain: 'drifting apart genetically'
+  fat: 'storing fat for lean times', learn: 'that learns from experience', noct: 'active by night', feel: 'sprouting feelers', plain: 'drifting apart genetically'
 };
 
 const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
@@ -295,6 +304,7 @@ class Sim {
     this.cumO = 0; this.oxygen = 0.03; this.oxyDip = 0;
     this.nextCatastrophe = 0; this.flash = null; this.terrainVer = 0;
     this.record = { complexity: 0, name: null };
+    this.blooms = []; this.archive = []; this.lastRefuge = -1e9;
     this.fert = new Float32Array(TW * TH);
     this.buildTerrain();
     this.seaLevel = this.seaStart; this.seaFalling = false;
@@ -347,6 +357,7 @@ class Sim {
       const i = ty * TW + tx, x = (tx + 0.5) * TC, y = (ty + 0.5) * TC, h = this.height[i];
       let f = 0.18;
       for (const v of this.vents) { const dx = x - v.x, dy = y - v.y; f += v.p * Math.exp(-(dx * dx + dy * dy) / (2 * 110 * 110)); }
+      for (const b of this.blooms) { const dx = x - b.x, dy = y - b.y, k = Math.sin(Math.PI * clamp((this.t - b.t0) / b.dur, 0, 1)); f += 1.1 * k * Math.exp(-(dx * dx + dy * dy) / (2 * b.R * b.R)); }
       if (h > sl) f = 0.45 + 0.65 * Math.min(1, (h - sl) / 0.06);
       else { const depth = sl - h; if (depth < 0.12) f += 0.7 * (1 - depth / 0.12); }
       this.fert[i] = f;
@@ -354,7 +365,9 @@ class Sim {
   }
 
   gauss() { let u = 0; while (u === 0) u = this.rng(); const v = this.rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
-  tempAt(y) { return this.climate + 0.9 * (y / H * 2 - 1); }
+  tempAt(y) { return this.climate + this.seasonT() + 0.9 * (y / H * 2 - 1); }
+  seasonT() { return 0.18 * Math.sin(TAU * this.t / SEASON); }
+  light() { return clamp(0.5 + 0.75 * Math.sin(TAU * this.t / DAY), 0, 1); }
 
   genesis(n, text) {
     const base = Object.assign({ segs: PROTO_SEGS.slice(), B: seedBrain() }, PROTO);
@@ -379,7 +392,7 @@ class Sim {
 
   makeSpecies(parent, g) {
     const f = {}; for (const k of GK) f[k] = g[k];
-    const sp = { id: this.spid++, parent, founder: f, fSegs: g.segs.slice(), fB: cloneBrain(g.B), born: this.t, extinct: null, pop: 0, peak: 0, recognized: false, hue: 28, name: null, genus: null, mean: this.meanOf([g]), rep: g, anc: null, packs: 0, alarmT: 0, alarmS: 0, calmT: 0, calmS: 0 };
+    const sp = { id: this.spid++, parent, founder: f, fSegs: g.segs.slice(), fB: cloneBrain(g.B), born: this.t, extinct: null, pop: 0, peak: 0, recognized: false, hue: 28, name: null, genus: null, mean: this.meanOf([g]), rep: g, anc: null, packs: 0, alarmT: 0, alarmS: 0, calmT: 0, calmS: 0, att: 0, esc: 0, dayEat: 0, nightEat: 0 };
     if (parent) { const sgn = this.rng() < 0.5 ? -1 : 1; sp.hue = (parent.hue + sgn * (22 + this.rng() * 50) + 360) % 360; }
     this.active.add(sp);
     return sp;
@@ -414,7 +427,8 @@ class Sim {
     // legs paddle a little in water and fins shuffle a little on land, so the move ashore has no dead end
     const swim = 1 - Math.pow(0.62, n[S_FIN] + 0.35 * n[S_LEG]), walk = 1 - Math.pow(0.55, n[S_LEG] + 0.3 * n[S_FIN]);
     c.swim = swim; c.walk = walk;
-    c.sense = Math.min(1, (1 - Math.pow(0.5, n[S_EYE])) * 0.9 + 0.12 * Math.min(2, n[S_FEEL]));
+    c.eyeS = (1 - Math.pow(0.5, n[S_EYE])) * 0.9; c.feelS = 0.14 * Math.min(3, n[S_FEEL]);
+    c.sense = Math.min(1, c.eyeS + c.feelS);
     c.armor = Math.min(0.9, 1 - Math.pow(0.62, n[S_SHELL]));
     c.spines = 1 - Math.pow(0.6, n[S_SPINE]);
     c.attack = 1 - Math.pow(0.55, n[S_JAW]);
@@ -426,9 +440,13 @@ class Sim {
     c.cap = 30 + 45 * c.mass + n[S_FAT] * 30 * g.size;
     c.mature = 100 + 70 * c.mass;
     c.links = links(g.B); c.neurons = g.B.h.length;
+    c.W = cloneBrain(g.B);
+    if (this.rng) { const dn = w => w === 0 ? 0 : w + this.gauss() * 0.3; c.W.wd = c.W.wd.map(dn); for (const nr of c.W.h) { nr.i = nr.i.map(dn); nr.o = nr.o.map(dn); } }
+    c.rbar = 0; c.trd = new Float32Array(NI * NO); c.trI = new Float32Array(c.neurons * NI); c.trO = new Float32Array(c.neurons * NO);
+    c.rew = 0; c.learned = 0; c.intake = 0;
     c.mem = new Float32Array(c.neurons);
     c.upkeep = K * (0.3 + 0.14 * Math.pow(c.mass, 1.3) + 0.06 * n[S_FIN] + 0.07 * n[S_LEG] + 0.12 * n[S_EYE] + 0.05 * n[S_JAW] + 0.09 * n[S_SHELL] + 0.05 * n[S_SPINE] + 0.03 * n[S_FAT] + 0.05 * n[S_FEEL] + 0.03 * n[S_BODY]
-      + 0.08 * g.litter + 0.1 * g.terr + 0.002 * c.links + 0.004 * c.neurons);
+      + 0.08 * g.litter + 0.1 * g.terr + 0.0025 * c.links + 0.005 * c.neurons + 0.03 * g.learn);
     c.moveK = K * 0.8 * (0.4 + 0.5 * c.mass);
     c.bite = 2 + c.mass * 1.0 + c.attack * 1.5;
     c.body = 10 * c.mass;
@@ -549,6 +567,14 @@ class Sim {
       this.seaLevel = Math.max(this.seaFinal, this.seaLevel - 0.00003);
       if (this.t % 100 === 0) this.terrainVer++;
     }
+    if (this.t % 2500 === 0 && rng() < 0.75) {
+      for (let k = 0; k < 20; k++) {
+        const x = 80 + rng() * (W - 160), y = 80 + rng() * (H - 160);
+        if (!this.isLand(x, y) || rng() < 0.3) { this.blooms.push({ x, y, t0: this.t, dur: 4000 + rng() * 3000, R: 60 + rng() * 60 }); break; }
+      }
+    }
+    this.blooms = this.blooms.filter(b => this.t - b.t0 < b.dur);
+    this._light = this.light();
     if (this.t % 50 === 0) this.updateFert();
     if (this.t >= this.nextCatastrophe) this.catastrophe();
     if (this.flash && this.t - this.flash.t > 400) this.flash = null;
@@ -570,8 +596,7 @@ class Sim {
     for (const b of births) this.creatures.push(b);
     if (this.t % 30 === 0) this.census();
     if (this.plants.length < 30) this.reseedPlants();
-    if (this.creatures.length === 0) this.genesis(30, 'All animal life has vanished. After a long silence, new cells assemble near the vents.');
-    else if (this.creatures.length < 25 && this.t % 400 === 0) this.genesis(8, 'Animal life has dwindled. Simple cells from the vents begin filling the empty seas again.', true);
+    if (this.creatures.length === 0 || (this.creatures.length < 15 && this.t % 400 === 0)) this.refuge();
   }
   cellOf(x, y) { return clamp((y / CELL) | 0, 0, GH - 1) * GW + clamp((x / CELL) | 0, 0, GW - 1); }
 
@@ -593,7 +618,7 @@ class Sim {
     const td = g.tpref - this.tempAt(p.y);
     const tf = Math.max(0, 1 - td * td * 1.5);
     const hab = land ? 0.15 + 0.85 * g.landTol : 1 - 0.5 * g.landTol;
-    const gross = 0.12 * g.grow * this.fert[ti] * tf * hab * (1 - 0.45 * g.tough) / (1 + crowd / 20);
+    const gross = 0.12 * g.grow * this.fert[ti] * tf * hab * (1 - 0.45 * g.tough) * (0.6 + 0.4 * this._light) / (1 + crowd / 20);
     this.cumO += gross;
     p.e += gross - (0.004 + 0.013 * g.grow + 0.012 * g.tough + 0.004 * g.spread + 0.004 * g.landTol);
     if (p.e > 14) p.e = 14;
@@ -641,6 +666,30 @@ class Sim {
       : `Mass extinction: massive volcanic eruptions choke the skies. About ${pct}% of animal life dies and oxygen levels fall.`, 'catastrophe');
   }
 
+  // when animal life crashes, the most complex recent lineage returns from a hidden refuge instead of evolution restarting from scratch
+  refuge() {
+    const recent = this.archive.filter(a => this.t - a.t < 40000).sort((a, b) => b.cx - a.cx);
+    if (!recent.length || this.t - this.lastRefuge < 3000) {
+      if (this.creatures.length === 0) this.genesis(30, 'All animal life has vanished. After a long silence, new cells assemble near the vents.');
+      return;
+    }
+    this.lastRefuge = this.t;
+    const a = recent[0], sp = a.sp, g = a.g;
+    const wantLand = g.terr > 0.5;
+    let placed = 0;
+    for (let k = 0; k < 400 && placed < 12; k++) {
+      const x = 20 + this.rng() * (W - 40), y = 20 + this.rng() * (H - 40);
+      if (this.isLand(x, y) !== wantLand) continue;
+      if (Math.abs(g.tpref - this.tempAt(y)) > 0.5) continue;
+      for (let j = 0; j < 3 && placed < 12; j++) { this.creatures.push(this.makeCreature(this.mutate(g), clamp(x + this.gauss() * 15, 5, W - 5), clamp(y + this.gauss() * 15, 5, H - 5), sp, 60, 0)); placed++; }
+    }
+    if (!placed) { if (this.creatures.length === 0) this.genesis(30, 'All animal life has vanished. After a long silence, new cells assemble near the vents.'); return; }
+    const quiet = this.t - (this.lastRefugeLog || -1e9) < 20000;
+    if (!quiet) this.lastRefugeLog = this.t;
+    if (sp.extinct !== null) { sp.extinct = null; this.active.add(sp); if (!quiet) this.log('A Lazarus species: ' + sp.name + ', thought extinct, reappears from a hidden refuge and spreads again.', 'stage', sp); }
+    else if (!quiet) this.log('Animal life has crashed, but a hidden population of ' + sp.name + ' survived and spreads again.', 'stage', sp);
+  }
+
   isReady(c) { return c.e > c.cap * 0.7 && c.age > c.mature && c.rcool <= 0; }
 
   act(c, births) {
@@ -649,7 +698,8 @@ class Sim {
     c.ph += 0.15 + c.v * 0.25;
     const ready = this.isReady(c);
     if (ready) c.ready++; else c.ready = 0;
-    const R = c.senseR, R2 = R * R;
+    const L = this._light === undefined ? 1 : this._light;
+    const R = 10 + 140 * Math.min(1, c.eyeS * (0.5 + 0.5 * L) + c.feelS) + c.r, R2 = R * R;
     const x0 = clamp(((c.x - R) / CELL) | 0, 0, GW - 1), x1 = clamp(((c.x + R) / CELL) | 0, 0, GW - 1);
     const y0 = clamp(((c.y - R) / CELL) | 0, 0, GH - 1), y1 = clamp(((c.y + R) / CELL) | 0, 0, GH - 1);
     let bf = null, bfd = R2, bfs = Infinity, bfMeat = false;
@@ -722,10 +772,12 @@ class Sim {
     I[15] = this.gauss() * 0.5;
     if (sigk) { I[16] = rel(sigk.x, sigk.y); } else I[16] = 0;
     I[17] = kinN ? kinSig / kinN : 0;
-    // brain
-    const B = g.B;
+    I[18] = L;
+    // brain (the animal's own copy, which it can tune by experience)
+    const B = c.W;
     let o0 = 0, o1 = 0, o2 = 0;
-    for (let j = 0; j < B.h.length; j++) {
+    const nh = B.h.length;
+    for (let j = 0; j < nh; j++) {
       const nr = B.h[j];
       let s = nr.s * c.mem[j];
       const wi = nr.i;
@@ -736,6 +788,32 @@ class Sim {
     const wd = B.wd;
     for (let i = 0; i < NI; i++) { const v = I[i]; if (v === 0) continue; const b = i * NO; o0 += v * wd[b]; o1 += v * wd[b + 1]; o2 += v * wd[b + 2]; }
     const turnOut = Math.tanh(o0), thrust = 1 / (1 + Math.exp(-o1 * 2));
+    if (g.learn > 0.03) {
+      // reward-modulated learning: connections that were active just before a reward (or a hurt) get strengthened (or weakened)
+      const p0 = turnOut, p1 = thrust * 2 - 1, p2 = Math.tanh(o2);
+      const trd = c.trd;
+      for (let i = 0; i < NI; i++) { const b = i * NO, v = I[i]; if (wd[b] !== 0) trd[b] = 0.9 * trd[b] + v * p0; if (wd[b + 1] !== 0) trd[b + 1] = 0.9 * trd[b + 1] + v * p1; if (wd[b + 2] !== 0) trd[b + 2] = 0.9 * trd[b + 2] + v * p2; }
+      for (let j = 0; j < nh; j++) {
+        const nr = B.h[j], h = c.mem[j], bi = j * NI, bo = j * NO;
+        for (let i = 0; i < NI; i++) if (nr.i[i] !== 0) c.trI[bi + i] = 0.9 * c.trI[bi + i] + I[i] * h;
+        if (nr.o[0] !== 0) c.trO[bo] = 0.9 * c.trO[bo] + h * p0;
+        if (nr.o[1] !== 0) c.trO[bo + 1] = 0.9 * c.trO[bo + 1] + h * p1;
+        if (nr.o[2] !== 0) c.trO[bo + 2] = 0.9 * c.trO[bo + 2] + h * p2;
+      }
+      const surprise = c.rew - c.rbar;
+      if (Math.abs(surprise) > 0.05) {
+        const k = g.learn * 0.06 * clamp(surprise, -1.5, 1.5);
+        for (let i = 0; i < wd.length; i++) if (wd[i] !== 0) wd[i] = clamp(wd[i] + k * trd[i], -4, 4);
+        for (let j = 0; j < nh; j++) {
+          const nr = B.h[j], bi = j * NI, bo = j * NO;
+          for (let i = 0; i < NI; i++) if (nr.i[i] !== 0) nr.i[i] = clamp(nr.i[i] + k * c.trI[bi + i], -4, 4);
+          for (let q = 0; q < NO; q++) if (nr.o[q] !== 0) nr.o[q] = clamp(nr.o[q] + k * c.trO[bo + q], -4, 4);
+        }
+        c.learned++;
+      }
+    }
+    c.rbar = 0.995 * c.rbar + 0.005 * c.rew;
+    c.rew = 0;
     c.sig = o2 > 0 ? 1 : 0;
     // tally signalling for the alarm-call milestone
     if (this.t % 5 === 0) { const sp = c.sp; if (thr) { sp.alarmT++; sp.alarmS += c.sig; } else { sp.calmT++; sp.calmS += c.sig; } }
@@ -752,8 +830,11 @@ class Sim {
     if (bf && !bf.dead && c.ecool <= 0) {
       const ex = bf.x - c.x, ey = bf.y - c.y, rr = c.r + 3;
       if (ex * ex + ey * ey < rr * rr) {
-        if (bfMeat) { bf.dead = true; c.e += bf.e * mEff; }
-        else { const take = Math.max(0, Math.min(bf.e - 1, c.bite)); bf.e -= take; c.e += take * pEff * (1 - bf.g.tough * 0.5); }
+        let gain;
+        if (bfMeat) { bf.dead = true; gain = bf.e * mEff; }
+        else { const take = Math.max(0, Math.min(bf.e - 1, c.bite)); bf.e -= take; gain = take * pEff * (1 - bf.g.tough * 0.5); }
+        c.e += gain; c.intake += gain; c.rew += Math.min(1, gain / 6);
+        if (L < 0.3) c.sp.nightEat++; else c.sp.dayEat++;
         c.ate = 6; c.ecool = 4;
       }
     }
@@ -770,10 +851,15 @@ class Sim {
         else if (prey.hit.sp === c.sp && prey.hit.ids.indexOf(c.id) < 0) { prey.hit.ids.push(c.id); prey.hit.t = this.t; }
         if (rng() < p * cover) {
           prey.dead = true;
-          c.e += (Math.max(0, prey.e) * 0.9 + prey.body) * mEff;
+          const gain = (Math.max(0, prey.e) * 0.9 + prey.body) * mEff;
+          c.e += gain; c.intake += gain; c.rew += 1; prey.sp.att++;
+          if (L < 0.3) c.sp.nightEat++; else c.sp.dayEat++;
           c.ate = 10; c.kills++; c.cool = 45;
           if (prey.hit && prey.hit.sp === c.sp && prey.hit.ids.length >= 2) c.sp.packs++;
-        } else if (prey.spines > 0) c.e -= prey.spines * 3;
+        } else {
+          prey.rew -= 1; prey.sp.att++; prey.sp.esc++;
+          if (prey.spines > 0) { c.e -= prey.spines * 3; c.rew -= 0.5; }
+        }
       }
     }
     if (c.ate > 0) c.ate--;
@@ -839,6 +925,9 @@ class Sim {
         let near = 0; for (const c of sample) { for (const o of this.cgrid[this.cellOf(c.x, c.y)]) if (o.sp === sp && o !== c && Math.abs(o.x - c.x) < 30 && Math.abs(o.y - c.y) < 30) near++; }
         sp.clump = near / sample.length;
         sp.onLand = sample.filter(c => this.isLand(c.x, c.y)).length / sample.length;
+        sp.mean.eff = sample.reduce((a, c) => a + (c.intake / Math.max(60, c.age)) / c.upkeep, 0) / sample.length;
+        sp.escape = sp.att >= 5 ? sp.esc / sp.att : null;
+        sp.att *= 0.9; sp.esc *= 0.9; sp.dayEat *= 0.95; sp.nightEat *= 0.95;
         sp.kinPull = sample.reduce((a, c) => a + c.g.B.wd[7 * NO], 0) / sample.length;
       }
       if (sp.pop > sp.peak) sp.peak = sp.pop;
@@ -856,13 +945,21 @@ class Sim {
         this.log('A plague sweeps through ' + sp.name + ', the most crowded species, killing ' + killed + '.', 'plague', sp);
       }
     }
+    if (this.t % 900 === 0) {
+      const tops = [...this.active].filter(sp => sp.recognized && sp.pop >= 5 && sp.rep).sort((a, b) => b.mean.cx - a.mean.cx).slice(0, 3);
+      for (const sp of tops) {
+        this.archive = this.archive.filter(a => a.sp !== sp);
+        this.archive.push({ sp, g: JSON.parse(JSON.stringify(sp.rep, (k, v) => k === '_n' ? undefined : v)), cx: sp.mean.cx, t: this.t });
+      }
+      if (this.archive.length > 12) this.archive.sort((a, b) => b.t - a.t).length = 12;
+    }
     let pt = 0, pl = 0, landPlants = 0;
     for (const p of this.plants) { pt += p.g.tough; pl += p.g.landTol; if (this.height[this.tcell(p.x, p.y)] > this.seaLevel) landPlants++; }
     const np = this.plants.length || 1;
     this.plantStats = { n: this.plants.length, tough: pt / np, landTol: pl / np, onLand: landPlants };
     // milestones
     const feats = {};
-    const ERA = { eyes: 'Dawn of Sight', swim: 'Age of Swimmers', oxy: 'Great Oxygenation', multi: 'Multicellular Bloom', segments: 'Age of Segments', pred: 'Age of Predators', arms: 'Arms Race', giant: 'Age of Giants', landplants: 'Greening of the Land', landanimals: 'Conquest of Land', brain: 'Age of Brains', herds: 'Social Age', packs: 'Age of Pack Hunters', mind: 'Age of Minds' };
+    const ERA = { eyes: 'Dawn of Sight', swim: 'Age of Swimmers', oxy: 'Great Oxygenation', multi: 'Multicellular Bloom', segments: 'Age of Segments', pred: 'Age of Predators', arms: 'Arms Race', giant: 'Age of Giants', landplants: 'Greening of the Land', landanimals: 'Conquest of Land', brain: 'Age of Brains', herds: 'Social Age', packs: 'Age of Pack Hunters', learning: 'Age of Learning', mind: 'Age of Minds' };
     const hit = (k, text, sp) => {
       feats[k] = true;
       if (this.milestones[k]) return;
@@ -890,6 +987,8 @@ class Sim {
       if (m.terr > 0.45 && n[S_LEG] >= 1 && sp.onLand > 0.5 && sp.pop >= 12) hit('landanimals', 'Conquest of land: ' + sp.name + ' walks out of the sea on ' + Math.round(n[S_LEG] * 2) + ' legs.', sp);
       if (sp.clump > 3 && sp.pop >= 15 && sp.kinPull > 1.0) hit('herds', 'Herds: ' + sp.name + ' moves in tight groups.', sp);
       if (sp.packs >= 15 && m.diet > 0.5) hit('packs', 'Pack hunting: ' + sp.name + ' brings down prey together.', sp);
+      if (m.learn > 0.4 && sp.pop >= 15) hit('learning', 'Learning evolves: ' + sp.name + ' adjusts its behavior from experience within its own lifetime.', sp);
+      if (sp.nightEat + sp.dayEat > 40 && sp.nightEat > 0.62 * (sp.nightEat + sp.dayEat)) hit('nocturnal', 'Night life: ' + sp.name + ' does most of its feeding in the dark.', sp);
       if (sp.alarmT > 150 && sp.alarmS / sp.alarmT > 0.5 && sp.calmT > 150 && sp.calmS / sp.calmT < 0.2) hit('alarm', 'Alarm calls: ' + sp.name + ' flashes a warning to its kin when danger appears.', sp);
     }
     if (this.oxygen > 0.35) hit('oxy', 'The Great Oxygenation: algae have filled the water with oxygen. Larger bodies are now possible.');
@@ -902,7 +1001,7 @@ class Sim {
     }
     const n = this.creatures.length || 1;
     let spc = 0; for (const sp of this.active) if (sp.recognized) spc++;
-    this.history.push({ t: this.t, pop: this.creatures.length, spc, size: tot.mass / n, diet: tot.diet / n, armor: tot.armor / n, temp: this.climate, plants: this.plants.length, oxy: this.oxygen, links: tot.links / n, neurons: tot.neurons / n, segs: tot.segs / n, land: onLand / n, cx: top ? top.mean.cx : 0 });
+    this.history.push({ t: this.t, pop: this.creatures.length, spc, size: tot.mass / n, diet: tot.diet / n, armor: tot.armor / n, temp: this.climate, plants: this.plants.length, oxy: this.oxygen, links: tot.links / n, neurons: tot.neurons / n, segs: tot.segs / n, land: onLand / n, cx: top ? top.mean.cx : 0, learn: this.creatures.reduce((a, c) => a + c.g.learn, 0) / n });
     if (this.history.length > 600) this.history = this.history.filter((_, i) => i % 2 === 0);
   }
 
@@ -916,10 +1015,10 @@ class Sim {
       eyes: d(S_EYE) / 2, fast: (d(S_FIN) + d(S_LEG)) / 3, big: (m.mass - (p.mass || m.mass)) / 4, small: ((p.mass || m.mass) - m.mass) / 4,
       pred: (m.diet - p.diet) + d(S_JAW) / 4, armor: d(S_SHELL) / 2, spine: d(S_SPINE) / 2, warm: (m.tpref - p.tpref) / 2.4, cold: (p.tpref - m.tpref) / 2.4,
       brood: m.litter - p.litter, graze: p.diet - m.diet, land: (m.terr - p.terr) * 1.3, sea: (p.terr - m.terr) * 1.2, brain: (m.neurons - p.neurons) / 4,
-      seg: (m.segs - p.segs) / 4, fat: d(S_FAT) / 2, feel: d(S_FEEL) / 2
+      seg: (m.segs - p.segs) / 4, fat: d(S_FAT) / 2, feel: d(S_FEEL) / 2, learn: (m.learn - p.learn) * 1.2
     };
     const n = m.count;
-    const ok = { eyes: n[S_EYE] >= 1, fast: n[S_FIN] + n[S_LEG] >= 2, big: m.mass > 1.5, small: true, pred: m.diet > 0.35, armor: n[S_SHELL] >= 1, spine: n[S_SPINE] >= 1, warm: m.tpref > 0.3, cold: m.tpref < -0.3, brood: m.litter > 0.5, graze: p.diet > 0.3, land: m.terr > 0.35, sea: p.terr > 0.35, brain: m.neurons >= 2, seg: m.segs >= 4, fat: n[S_FAT] >= 1, feel: n[S_FEEL] >= 1 };
+    const ok = { eyes: n[S_EYE] >= 1, fast: n[S_FIN] + n[S_LEG] >= 2, big: m.mass > 1.5, small: true, pred: m.diet > 0.35, armor: n[S_SHELL] >= 1, spine: n[S_SPINE] >= 1, warm: m.tpref > 0.3, cold: m.tpref < -0.3, brood: m.litter > 0.5, graze: p.diet > 0.3, land: m.terr > 0.35, sea: p.terr > 0.35, brain: m.neurons >= 2, seg: m.segs >= 4, fat: n[S_FAT] >= 1, feel: n[S_FEEL] >= 1, learn: m.learn > 0.3 };
     let best = 'plain', bs = 0.04;
     for (const k in score) if (ok[k] && score[k] > bs) { bs = score[k]; best = k; }
     if (!a) best = 'plain';
@@ -957,22 +1056,23 @@ class Sim {
     const ms = {};
     for (const k in this.milestones) { const m = this.milestones[k]; ms[k] = { t: m.t, sp: m.sp && keep.has(m.sp) ? m.sp.id : null }; }
     return {
-      v: 3, savedAt: Date.now(), seed: this.seed, s: this._s, t: this.t, nid: this.nid, spid: this.spid,
-      sps: [...keep].map(sp => { const p = near(sp); return { id: sp.id, p: p ? p.id : null, a: sp.anc ? sp.anc.id : null, f: sp.founder, fs: sp.fSegs, fB: bs(sp.fB), b: sp.born, x: sp.extinct, pop: sp.pop, pk: sp.peak, r: sp.recognized, h: sp.hue, n: sp.name, g: sp.genus, m: sp.mean, tr: sp.trait || null, pk2: sp.packs, pl: sp.plague || null, rep: sp.extinct === null ? null : gs(sp.rep) }; }),
+      v: 4, savedAt: Date.now(), seed: this.seed, s: this._s, t: this.t, nid: this.nid, spid: this.spid,
+      sps: [...keep].map(sp => { const p = near(sp); return { id: sp.id, p: p ? p.id : null, a: sp.anc ? sp.anc.id : null, f: sp.founder, fs: sp.fSegs, fB: bs(sp.fB), b: sp.born, x: sp.extinct, pop: sp.pop, pk: sp.peak, r: sp.recognized, h: sp.hue, n: sp.name, g: sp.genus, m: sp.mean, tr: sp.trait || null, pk2: sp.packs, pl: sp.plague || null, de: sp.dayEat, ne: sp.nightEat, rep: sp.extinct === null ? null : gs(sp.rep) }; }),
       act: [...this.active].map(sp => sp.id), rec: this.recognized.map(sp => sp.id),
       cr: this.creatures.map(c => ({ id: c.id, x: r2(c.x), y: r2(c.y), a: r2(c.a), g: gs(c.g), s: c.sp.id, e: r2(c.e), age: c.age, gen: c.gen, cool: c.cool, v: r2(c.v), ph: r2(c.ph), k: c.kills, ma: r2(c.maxAge), rc: c.rcool })),
       pl: this.plants.filter(p => !p.dead).map(p => [r2(p.x), r2(p.y), r2(p.e), p.age, Math.round(p.maxAge), r3(p.g.grow), r3(p.g.tough), r3(p.g.spread), r3(p.g.tpref), r3(p.g.landTol)]),
       meat: this.meat.filter(m => !m.dead).map(m => [r2(m.x), r2(m.y), r2(m.e), m.b]),
       vents: this.vents, climate: this.climate, ct: this.climateTarget, nc: this.nextClimate, ch: this.climateHold,
       mg: this.maxGen, era: this.era, er: this.eraRank, ms, events: this.events, history: this.history,
-      names: [...this.names], genera: [...this.genera], rec2: this.record,
+      names: [...this.names], genera: [...this.genera], rec2: this.record, blooms: this.blooms, lr: this.lastRefuge,
+      arch: this.archive.filter(a => keep.has(a.sp)).map(a => ({ sp: a.sp.id, g: gs(a.g), cx: a.cx, t: a.t })),
       cumO: this.cumO, oxyDip: this.oxyDip, sea: this.seaLevel, sf: this.seaFalling, ncat: this.nextCatastrophe, cats: this.catastrophes || 0
     };
   }
   restore(o) {
     this._s = o.s; this.t = o.t; this.nid = o.nid; this.spid = o.spid;
     const byId = new Map();
-    for (const d of o.sps) byId.set(d.id, { id: d.id, parent: null, founder: d.f, fSegs: d.fs, fB: d.fB, born: d.b, extinct: d.x, pop: d.pop, peak: d.pk, recognized: d.r, hue: d.h, name: d.n, genus: d.g, mean: d.m, anc: null, trait: d.tr, rep: d.rep, packs: d.pk2 || 0, plague: d.pl, alarmT: 0, alarmS: 0, calmT: 0, calmS: 0 });
+    for (const d of o.sps) byId.set(d.id, { id: d.id, parent: null, founder: d.f, fSegs: d.fs, fB: d.fB, born: d.b, extinct: d.x, pop: d.pop, peak: d.pk, recognized: d.r, hue: d.h, name: d.n, genus: d.g, mean: d.m, anc: null, trait: d.tr, rep: d.rep, packs: d.pk2 || 0, plague: d.pl, alarmT: 0, alarmS: 0, calmT: 0, calmS: 0, att: 0, esc: 0, dayEat: d.de || 0, nightEat: d.ne || 0 });
     for (const d of o.sps) { const sp = byId.get(d.id); sp.parent = byId.get(d.p) || null; sp.anc = byId.get(d.a) || null; }
     for (const id of o.act) { const sp = byId.get(id); if (sp) this.active.add(sp); }
     for (const id of o.rec) { const sp = byId.get(id); if (sp) this.recognized.push(sp); }
@@ -992,6 +1092,8 @@ class Sim {
     this.events = o.events || []; this.history = o.history || [];
     this.names = new Set(o.names || []); this.genera = new Set(o.genera || []);
     this.record = o.rec2 || { complexity: 0, name: null };
+    this.blooms = o.blooms || []; this.lastRefuge = o.lr === undefined ? -1e9 : o.lr;
+    this.archive = (o.arch || []).map(a => ({ sp: byId.get(a.sp), g: a.g, cx: a.cx, t: a.t })).filter(a => a.sp);
     this.cumO = o.cumO; this.oxyDip = o.oxyDip || 0; this.oxygen = Math.max(0.03, 1 - Math.exp(-this.cumO / 1.5e6) - this.oxyDip);
     this.seaLevel = o.sea; this.seaFalling = o.sf; this.nextCatastrophe = o.ncat; this.catastrophes = o.cats || 0;
     this.terrainVer++;
@@ -1004,7 +1106,7 @@ function fmtSpan(y) {
   return Math.round(y / 1e3) + ' thousand years';
 }
 
-const api = { Sim, W, H, YPT, TC, TW, TH, GENES, NI, NO, MAXH, SEG, NSEG, S_BODY, S_FIN, S_LEG, S_EYE, S_JAW, S_SHELL, S_SPINE, S_FAT, S_FEEL, IN_LABELS, OUT_LABELS, SEED_LINKS, links, hiddenUsed, activeNeurons, memoryNeurons, segCounts, complexity, fmtSpan };
+const api = { Sim, W, H, YPT, DAY, SEASON, TC, TW, TH, GENES, NI, NO, MAXH, SEG, NSEG, S_BODY, S_FIN, S_LEG, S_EYE, S_JAW, S_SHELL, S_SPINE, S_FAT, S_FEEL, IN_LABELS, OUT_LABELS, SEED_LINKS, links, hiddenUsed, activeNeurons, memoryNeurons, segCounts, complexity, fmtSpan };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Evo = api;
 })(typeof window !== 'undefined' ? window : this);
 
@@ -1012,18 +1114,18 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
 <script>
 (function(){
 'use strict';
-const { Sim, W, H, YPT, TC, TW, TH, NI, NO, IN_LABELS, OUT_LABELS, links, activeNeurons, memoryNeurons, segCounts, complexity, S_BODY, S_FIN, S_LEG, S_EYE, S_JAW, S_SHELL, S_SPINE, S_FAT, S_FEEL } = window.Evo;
+const { Sim, W, H, YPT, DAY, SEASON, TC, TW, TH, NI, NO, IN_LABELS, OUT_LABELS, links, activeNeurons, memoryNeurons, segCounts, complexity, S_BODY, S_FIN, S_LEG, S_EYE, S_JAW, S_SHELL, S_SPINE, S_FAT, S_FEEL } = window.Evo;
 const TAU = Math.PI * 2;
 const UM = 25; // micrometres per world unit
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const $ = id => document.getElementById(id);
 
-const SAVE_KEY = 'genesis-pool-save-v3';
+const SAVE_KEY = 'genesis-pool-save-v4';
 const CATCH_RATE = 90, CATCH_MAX = 12000; // ticks per real second at 1x, and the catch-up cap
 let storageOK = true, saved = null;
 try { const raw = localStorage.getItem(SAVE_KEY); saved = raw ? JSON.parse(raw) : null; } catch (e) { storageOK = false; saved = null; }
 let sim = null;
-if (saved && saved.v === 3) { try { sim = new Sim(saved.seed, saved); } catch (e) { sim = null; saved = null; } }
+if (saved && saved.v === 4) { try { sim = new Sim(saved.seed, saved); } catch (e) { sim = null; saved = null; } }
 const isNewWorld = !sim;
 if (!sim) sim = new Sim((Math.random() * 1e9) | 0);
 const SPEEDS = [{ k: '½×', s: 0.75 }, { k: '1×', s: 1.5 }, { k: '4×', s: 6 }, { k: '12×', s: 18 }];
@@ -1250,6 +1352,16 @@ function draw() {
   for (const m of sim.meat) { if (m.dead) continue; ctx.moveTo(m.x + 1.7, m.y); ctx.arc(m.x, m.y, 1.7, 0, TAU); }
   ctx.fill();
 
+  // blooms of food
+  for (const b of sim.blooms) {
+    const k = Math.sin(Math.PI * Math.min(1, Math.max(0, (sim.t - b.t0) / b.dur)));
+    const rg = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.R * 1.6);
+    rg.addColorStop(0, `rgba(150,205,120,${0.16 * k})`); rg.addColorStop(1, 'rgba(150,205,120,0)');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(b.x, b.y, b.R * 1.6, 0, TAU); ctx.fill();
+  }
+  const lightNow = sim.light();
+  if (lightNow < 1) { ctx.fillStyle = `rgba(4,10,28,${(1 - lightNow) * 0.5})`; ctx.fillRect(0, 0, W, H); }
+
   // organisms
   const vx0 = cam.x - cw / 2 / s - 30, vx1 = cam.x + cw / 2 / s + 30, vy0 = cam.y - ch / 2 / s - 30, vy1 = cam.y + ch / 2 / s + 30;
   const ph0 = reduceMotion ? 1 : 0;
@@ -1262,6 +1374,8 @@ function draw() {
     }
     drawMorph(ctx, c.x, c.y, c.a, c.g, c.sp.hue, c.r, reduceMotion ? ph0 : c.ph, alpha, c.sig > 0);
   }
+
+  if (lightNow < 1) { ctx.fillStyle = `rgba(4,10,28,${(1 - lightNow) * 0.18})`; ctx.fillRect(0, 0, W, H); }
 
   // impact flash
   if (sim.flash) {
@@ -1289,6 +1403,9 @@ function draw() {
   ctx.fillStyle = 'rgba(160,190,200,.7)';
   ctx.textBaseline = 'top';
   ctx.fillText('COLD NORTH  ' + tempC(sim.tempAt(0)).toFixed(0) + '°C', Math.max(left, 0) + 12, Math.max(top, 0) + 10);
+  ctx.textAlign = 'center'; ctx.fillStyle = lightNow < 0.3 ? 'rgba(170,190,240,.85)' : 'rgba(242,212,150,.8)';
+  ctx.fillText(lightNow < 0.3 ? 'NIGHT' : lightNow < 0.7 ? (Math.cos(2 * Math.PI * sim.t / DAY) > 0 ? 'DAWN' : 'DUSK') : 'DAY', cw / 2, Math.max(top, 0) + 10);
+  ctx.textAlign = 'left';
   ctx.textBaseline = 'bottom';
   ctx.textAlign = 'right';
   ctx.fillStyle = 'rgba(240,180,130,.75)';
@@ -1356,14 +1473,16 @@ function renderInspector(force) {
     ['Habitat', g.terr > 0.55 ? 'Land' : g.terr > 0.3 ? 'Shoreline' : 'Water'],
     ['Prefers', tempC(g.tpref).toFixed(0) + '°C'],
     ['Offspring', String(1 + Math.floor(g.litter * 2.999)) + ' per mating'],
+    ['Learns', g.learn > 0.5 ? 'Quickly' : g.learn > 0.2 ? 'Somewhat' : g.learn > 0.03 ? 'Barely' : 'No'],
     ['Complexity', complexity(g).toFixed(1)]
   ];
   if (c.kills) rows.push(['Kills', String(c.kills)]);
   $('iStats').innerHTML = rows.map(r => `<dt>${r[0]}</dt><dd>${r[1]}</dd>`).join('');
-  if (force) drawBrain(g.B);
+  if (force || (g.learn > 0.03 && performance.now() - lastBrainDraw > 1000)) { drawBrain(c.W); lastBrainDraw = performance.now(); }
   const hu = activeNeurons(g.B), mm = memoryNeurons(g.B);
-  $('brainCap').textContent = links(g.B) + ' neural links, ' + (hu ? hu + ' inner neuron' + (hu > 1 ? 's' : '') + ' in use' + (mm ? ' (' + mm + ' with memory)' : '') : 'no inner neurons yet') + (c.sig ? '. Signaling now.' : '');
+  $('brainCap').textContent = links(g.B) + ' neural links, ' + (hu ? hu + ' inner neuron' + (hu > 1 ? 's' : '') + ' in use' + (mm ? ' (' + mm + ' with memory)' : '') : 'no inner neurons yet') + (g.learn > 0.03 ? '. Learned from ' + c.learned + ' surprises so far' : '') + (c.sig ? '. Signaling now' : '') + '.';
 }
+let lastBrainDraw = 0;
 function drawBrain(B) {
   const c = $('brainCv'), x = c.getContext('2d'), w = c.width, hgt = c.height;
   x.clearRect(0, 0, w, hgt);
@@ -1475,6 +1594,7 @@ const VITALS = [
   { k: 'Top complexity', col: '#F3F0E4', get: h => h.cx || 0, fmt: v => v.toFixed(1), lo: 0 },
   { k: 'Body sections', col: '#9CC7A6', get: h => h.segs || 0, fmt: v => v.toFixed(1), lo: 0 },
   { k: 'Inner neurons', col: '#C3A6EE', get: h => h.neurons || 0, fmt: v => v.toFixed(1), lo: 0 },
+  { k: 'Learning', col: '#F3F0E4', get: h => h.learn || 0, fmt: v => Math.round(v * 100) + '%', lo: 0, hi: 1 },
   { k: 'Meat in diet', col: '#E57A62', get: h => h.diet, fmt: v => Math.round(v * 100) + '%', lo: 0, hi: 1 },
   { k: 'Living on land', col: '#C8B478', get: h => h.land || 0, fmt: v => Math.round(v * 100) + '%', lo: 0, hi: 1 },
   { k: 'Climate', col: '#E0A07A', get: h => tempC(h.temp), fmt: v => v.toFixed(1) + '°C', lo: 4, hi: 24 }
@@ -1514,6 +1634,30 @@ function renderVitals() {
 }
 
 const treeCv = $('tree');
+function renderBrains() {
+  const cvb = $('brainsChart'), r = cvb.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1);
+  const w = Math.max(10, r.width), hh = Math.max(10, r.height);
+  if (cvb.width !== Math.round(w * d) || cvb.height !== Math.round(hh * d)) { cvb.width = Math.round(w * d); cvb.height = Math.round(hh * d); }
+  const x = cvb.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); x.clearRect(0, 0, w, hh);
+  const pts = [...sim.active].filter(s => s.recognized && s.pop >= 5 && s.mean && s.mean.eff !== undefined);
+  const pl = 34, pr = 12, pt = 12, pb = 30;
+  const maxN = Math.max(4, ...pts.map(s => s.mean.neurons)), maxE = Math.max(1.5, ...pts.map(s => s.mean.eff * 1.2));
+  const X = v => pl + v / maxN * (w - pl - pr), Y = v => hh - pb - v / maxE * (hh - pt - pb);
+  x.strokeStyle = 'rgba(136,163,158,.18)'; x.lineWidth = 1;
+  x.beginPath(); x.moveTo(pl, pt); x.lineTo(pl, hh - pb); x.lineTo(w - pr, hh - pb); x.stroke();
+  x.strokeStyle = 'rgba(136,163,158,.25)'; x.setLineDash([3, 4]); x.beginPath(); x.moveTo(pl, Y(1)); x.lineTo(w - pr, Y(1)); x.stroke(); x.setLineDash([]);
+  x.font = '10.5px "IBM Plex Mono", ui-monospace, monospace'; x.fillStyle = 'rgba(136,163,158,.85)';
+  x.textAlign = 'left'; x.textBaseline = 'alphabetic'; x.fillText('0', pl - 4, hh - pb + 14);
+  x.textAlign = 'right'; x.fillText(maxN.toFixed(0) + ' inner neurons', w - pr, hh - pb + 14);
+  x.textAlign = 'left'; x.fillText('break-even', pl + 4, Y(1) - 4);
+  x.save(); x.translate(11, hh / 2); x.rotate(-Math.PI / 2); x.textAlign = 'center'; x.fillText('food gathered ÷ cost', 0, 0); x.restore();
+  if (!pts.length) { x.textAlign = 'center'; x.fillText('Waiting for species to form', w / 2, hh / 2); return; }
+  for (const s of pts) {
+    const rad = Math.min(11, 3 + Math.sqrt(s.pop) * 0.8);
+    x.fillStyle = `hsla(${s.hue},62%,64%,.8)`; x.beginPath(); x.arc(X(s.mean.neurons), Y(Math.min(maxE, s.mean.eff)), rad, 0, TAU); x.fill();
+    if (s.mean.learn > 0.3) { x.strokeStyle = '#F3F0E4'; x.lineWidth = 1.5; x.stroke(); }
+  }
+}
 function renderTree() {
   const r = treeCv.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1);
   const w = Math.max(10, r.width), h = Math.max(10, r.height);
@@ -1581,7 +1725,8 @@ function renderHeader() {
   $('sPop').textContent = sim.creatures.length;
   let spc = 0; for (const s of sim.active) if (s.recognized && s.pop > 0) spc++;
   $('sSpc').textContent = spc;
-  $('sGen').textContent = sim.maxGen;
+  const st = Math.sin(2 * Math.PI * sim.t / SEASON);
+  $('sSeason').textContent = (st > 0.35 ? 'Warm' : st < -0.35 ? 'Cold' : st > 0 ? 'Warming' : 'Cooling') + ' · ' + (sim.light() < 0.3 ? 'night' : 'day');
   $('sOxy').textContent = Math.round(sim.oxygen * 100) + '%';
   const lastH = sim.history[sim.history.length - 1];
   $('sCx').textContent = lastH ? lastH.cx.toFixed(1) : '0';
@@ -1589,7 +1734,7 @@ function renderHeader() {
 
 function refreshSide(all) {
   renderHeader();
-  if (all) { renderSpecies(); renderVitals(); renderTree(); renderChronicle(); }
+  if (all) { renderSpecies(); renderVitals(); renderBrains(); renderTree(); renderChronicle(); }
 }
 
 /* ---------- main loop ---------- */
@@ -1612,7 +1757,7 @@ function loop(now) {
   }
   draw();
   if (now - lastHead > 250) { lastHead = now; renderHeader(); }
-  if (now - lastSide > 1000) { lastSide = now; renderSpecies(); renderVitals(); renderTree(); renderChronicle(); }
+  if (now - lastSide > 1000) { lastSide = now; renderSpecies(); renderVitals(); renderBrains(); renderTree(); renderChronicle(); }
   if (selected && now - lastInsp > 250) { lastInsp = now; renderInspector(false); }
   requestAnimationFrame(loop);
 }
