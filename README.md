@@ -10,8 +10,9 @@ Live: https://nathansix.github.io/genesis-pool/
 - **Brains** are small neural networks that can add neurons by duplication, gain short-term memory, and send and read signals (flashes) between members of a species.
 - **Learning**: each animal is born with a slightly imperfect copy of its inherited brain and can tune it during its life. Connections that were active just before a better-than-usual meal get stronger; connections active before getting hurt get weaker. How fast an animal learns is itself a gene.
 - **Reproduction** is sexual: ready animals seek a mate of their own species, and offspring mix both parents' genes. Animals that have drifted too far apart genetically can no longer breed, so lineages split into true species. An animal that finds no partner for a long time reproduces alone.
+- **Culture**: newborns copy part of what their parent learned during its life, so useful habits can be handed down and build up over generations. How closely young copy their parents is a gene, and teaching is stronger from parents that care for their young.
 - **Parental care** is a gene: caring parents put more energy into each young, their young follow them, and predators have a harder time taking young that stay close to a parent.
-- **The deep sea** is a permanently dark zone with its own black-smoker vent feeding bacterial mats. Living there takes a heritable tolerance for depth.
+- **The deep sea** darkens gradually from the continental shelf down to an abyss with its own black-smoker vent feeding bacterial mats. Living deeper takes a heritable tolerance for depth, and the gradual slope lets lineages move in step by step.
 - **Plants** are organisms too, evolving growth rate, toughness, dispersal, temperature preference and tolerance for dry land.
 
 ## What keeps many species alive
