@@ -26,6 +26,6 @@ Day turns to night (eyes work worse in the dark, feelers don't, and algae grow m
 ## Notes
 
 - Everything runs in the browser from one file, `index.html`.
-- Each browser keeps its own world and autosaves it. When you return, it catches up on up to about 2 minutes of evolution.
+- Each browser keeps its own world and autosaves it every 15 seconds and when you leave the page, using the browser's database with a quick-storage backup. Saves stay a roughly constant size however long a world runs. If a browser or in-app viewer has storage turned off, the page says so; opening the link in Safari or Chrome keeps the world. When you return, it catches up on up to about 2 minutes of evolution.
 - The "Do bigger brains help?" chart plots every living species by brain size against how much food it gathers for what it costs to stay alive.
 - Double-click (or use Zoom) to zoom in, drag to look around, and click any animal to see its body parts and a live diagram of its brain.

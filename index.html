@@ -227,6 +227,11 @@ function newCreature(id, x, y, a, g, sp, e, age, gen, ph) {
 }
 function newPlant(x, y, g, e, age, maxAge) { return { x, y, g, e, age, maxAge, dead: false }; }
 function newMeat(x, y, e, b) { return { x, y, e, b, dead: false }; }
+// saves store only the nonzero weights of a brain, as "index:value" pairs
+function encW(a) { let s = ''; for (let i = 0; i < a.length; i++) if (a[i] !== 0) s += (s ? ',' : '') + i + ':' + Math.round(a[i] * 1000) / 1000; return s; }
+function decW(v, n) { if (Array.isArray(v)) return v; const a = new Array(n).fill(0); if (v) for (const kv of v.split(',')) { const j = kv.indexOf(':'); a[+kv.slice(0, j)] = +kv.slice(j + 1); } return a; }
+function decBrain(b) { return b ? { wd: decW(b.wd, NI * NO), h: b.h.map(n => ({ i: decW(n.i, NI), o: decW(n.o, NO), s: n.s })) } : b; }
+function decGenome(g) { if (g && g.B) g.B = decBrain(g.B); return g; }
 
 /* ---------- genome layout ---------- */
 // continuous genes; body parts come from the segment list
@@ -632,7 +637,7 @@ class Sim {
     this.creatures = cs.filter(c => !c.dead);
     for (const b of births) this.creatures.push(b);
     if (this.t % 30 === 0) this.census();
-    if (this.plants.length < 30) this.reseedPlants();
+    if (this._plantLive < 30) this.reseedPlants();
     if (this.creatures.length === 0 || (this.creatures.length < 15 && this.t % 400 === 0)) this.refuge();
   }
   cellOf(x, y) { return clamp((y / CELL) | 0, 0, GH - 1) * GW + clamp((x / CELL) | 0, 0, GW - 1); }
@@ -723,6 +728,10 @@ class Sim {
     if (!placed) { if (this.creatures.length === 0) this.genesis(30, 'All animal life has vanished. After a long silence, new cells assemble near the vents.'); return; }
     const quiet = this.t - (this.lastRefugeLog || -1e9) < 20000;
     if (!quiet) this.lastRefugeLog = this.t;
+    if (sp.extinct !== null || !sp.fB) {
+      const f = {}; for (const k of GK) f[k] = g[k];
+      sp.founder = f; sp.fSegs = g.segs.slice(); sp.fB = cloneBrain(g.B); sp.rep = g; sp.mean = Object.assign(this.meanOf([g]), { mass: g.size * (0.7 + 0.3 * g.segs.length) });
+    }
     if (sp.extinct !== null) { sp.extinct = null; this.active.add(sp); if (!quiet) this.log('A Lazarus species: ' + sp.name + ', thought extinct, reappears from a hidden refuge and spreads again.', 'stage', sp); }
     else if (!quiet) this.log('Animal life has crashed, but a hidden population of ' + sp.name + ' survived and spreads again.', 'stage', sp);
   }
@@ -839,7 +848,8 @@ class Sim {
     if (sigk) { I[16] = rel(sigk.x, sigk.y); } else I[16] = 0;
     I[17] = kinN ? kinSig / kinN : 0;
     I[18] = L;
-    const par = c.par && !c.par.dead && c.age < c.mature ? c.par : null;
+    if (c.par && (c.par.dead || c.age >= c.mature)) c.par = null;
+    const par = c.par;
     if (par) { const dx = par.x - c.x, dy = par.y - c.y, d = Math.hypot(dx, dy); I[19] = rel(par.x, par.y); I[20] = 1 - Math.min(1, d / 120); } else { I[19] = 0; I[20] = 0; }
     // brain (the animal's own copy, which it can tune by experience)
     const B = c.W;
@@ -1026,6 +1036,7 @@ class Sim {
         this.log('A plague sweeps through ' + sp.name + ', the most crowded species, killing ' + killed + '.', 'plague', sp);
       }
     }
+    if (this.t % 3000 === 0) this.pruneLineages();
     if (this.t % 900 === 0) {
       const tops = [...this.active].filter(sp => sp.recognized && sp.pop >= 5 && sp.rep).sort((a, b) => b.mean.cx - a.mean.cx).slice(0, 3);
       for (const sp of tops) {
@@ -1035,9 +1046,9 @@ class Sim {
       if (this.archive.length > 12) this.archive.sort((a, b) => b.t - a.t).length = 12;
     }
     let pt = 0, pl = 0, landPlants = 0;
-    for (const p of this.plants) { pt += p.g.tough; pl += p.g.landTol; if (this.height[this.tcell(p.x, p.y)] > this.seaLevel) landPlants++; }
-    const np = this.plants.length || 1;
-    this.plantStats = { n: this.plants.length, tough: pt / np, landTol: pl / np, onLand: landPlants };
+    for (const p of this.plants) { if (p.dead) continue; pt += p.g.tough; pl += p.g.landTol; if (this.height[this.tcell(p.x, p.y)] > this.seaLevel) landPlants++; }
+    const np = this._plantLive || 1;
+    this.plantStats = { n: this._plantLive, tough: pt / np, landTol: pl / np, onLand: landPlants };
     // milestones
     const feats = {};
     const ERA = { eyes: 'Dawn of Sight', swim: 'Age of Swimmers', oxy: 'Great Oxygenation', multi: 'Multicellular Bloom', segments: 'Age of Segments', pred: 'Age of Predators', arms: 'Arms Race', giant: 'Age of Giants', landplants: 'Greening of the Land', landanimals: 'Conquest of Land', brain: 'Age of Brains', herds: 'Social Age', packs: 'Age of Pack Hunters', learning: 'Age of Learning', deep: 'Age of the Abyss', care: 'Age of Families', culture: 'Age of Culture', mind: 'Age of Minds' };
@@ -1086,8 +1097,25 @@ class Sim {
     }
     const n = this.creatures.length || 1;
     let spc = 0; for (const sp of this.active) if (sp.recognized) spc++;
-    this.history.push({ t: this.t, pop: this.creatures.length, spc, size: tot.mass / n, diet: tot.diet / n, armor: tot.armor / n, temp: this.climate, plants: this.plants.length, oxy: this.oxygen, links: tot.links / n, neurons: tot.neurons / n, segs: tot.segs / n, land: onLand / n, cx: top ? top.mean.cx : 0, learn: this.creatures.reduce((a, c) => a + c.g.learn, 0) / n, care: this.creatures.reduce((a, c) => a + c.g.care, 0) / n, deep: this.creatures.filter(c => this.isDeep(c.x, c.y) && !this.isLand(c.x, c.y)).length / n, culture: this.creatures.reduce((a, c) => a + c.g.culture, 0) / n, trad: this.creatures.reduce((a, c) => Math.max(a, c.cultGen), 0) });
+    this.history.push({ t: this.t, pop: this.creatures.length, spc, size: tot.mass / n, diet: tot.diet / n, armor: tot.armor / n, temp: this.climate, plants: this._plantLive, oxy: this.oxygen, links: tot.links / n, neurons: tot.neurons / n, segs: tot.segs / n, land: onLand / n, cx: top ? top.mean.cx : 0, learn: this.creatures.reduce((a, c) => a + c.g.learn, 0) / n, care: this.creatures.reduce((a, c) => a + c.g.care, 0) / n, deep: this.creatures.filter(c => this.isDeep(c.x, c.y) && !this.isLand(c.x, c.y)).length / n, culture: this.creatures.reduce((a, c) => a + c.g.culture, 0) / n, trad: this.creatures.reduce((a, c) => Math.max(a, c.cultGen), 0) });
     if (this.history.length > 600) this.history = this.history.filter((_, i) => i % 2 === 0);
+  }
+
+  // keep living species, their named ancestors, the most notable extinct ones and refuge lineages; drop the rest
+  pruneLineages() {
+    const keep = new Set(this.active);
+    for (const a of this.archive) keep.add(a.sp);
+    for (const k in this.milestones) if (this.milestones[k].sp) keep.add(this.milestones[k].sp);
+    for (const sp of this.active) { let a = sp.anc; while (a && !keep.has(a)) { keep.add(a); a = a.anc; } }
+    const extinct = this.recognized.filter(sp => sp.extinct !== null && !keep.has(sp)).sort((a, b) => b.peak - a.peak);
+    for (const sp of extinct.slice(0, 80)) keep.add(sp);
+    const nearest = sp => { let a = sp; while (a && !keep.has(a)) a = a.parent; return a; };
+    for (const sp of keep) {
+      sp.parent = sp.parent ? nearest(sp.parent) : null;
+      let a = sp.anc; while (a && !keep.has(a)) a = a.anc; sp.anc = a || null;
+      if (sp.extinct !== null) { sp.fB = null; sp.founder = null; sp.fSegs = null; sp.rep = null; }
+    }
+    this.recognized = this.recognized.filter(sp => keep.has(sp));
   }
 
   recognize(sp) {
@@ -1136,20 +1164,27 @@ class Sim {
     const keep = new Set(this.recognized); for (const sp of this.active) keep.add(sp);
     const near = sp => { let a = sp.parent; while (a && !keep.has(a)) a = a.parent; return a; };
     const r2 = v => Math.round(v * 100) / 100, r3 = v => Math.round(v * 1000) / 1000;
-    const bs = b => ({ wd: b.wd.map(r3), h: b.h.map(n => ({ i: n.i.map(r3), o: n.o.map(r3), s: r3(n.s) })) });
+    const bs = b => ({ wd: encW(b.wd), h: b.h.map(n => ({ i: encW(n.i), o: encW(n.o), s: r3(n.s) })) });
     const gs = g => { const o = {}; for (const k of GK) o[k] = r3(g[k]); o.segs = g.segs.slice(); o.B = bs(g.B); return o; };
+    const rmean = m => { if (!m) return null; const o = {}; for (const k in m) o[k] = Array.isArray(m[k]) ? m[k].map(r2) : typeof m[k] === 'number' ? r3(m[k]) : m[k]; return o; };
+    const rh = h => { const o = {}; for (const k in h) o[k] = typeof h[k] === 'number' && k !== 't' ? r3(h[k]) : h[k]; return o; };
     const ms = {};
     for (const k in this.milestones) { const m = this.milestones[k]; ms[k] = { t: m.t, sp: m.sp && keep.has(m.sp) ? m.sp.id : null }; }
     return {
-      v: 6, savedAt: Date.now(), seed: this.seed, s: this._s, t: this.t, nid: this.nid, spid: this.spid,
-      sps: [...keep].map(sp => { const p = near(sp); return { id: sp.id, p: p ? p.id : null, a: sp.anc ? sp.anc.id : null, f: sp.founder, fs: sp.fSegs, fB: bs(sp.fB), b: sp.born, x: sp.extinct, pop: sp.pop, pk: sp.peak, r: sp.recognized, h: sp.hue, n: sp.name, g: sp.genus, m: sp.mean, tr: sp.trait || null, pk2: sp.packs, pl: sp.plague || null, de: sp.dayEat, ne: sp.nightEat, rep: sp.extinct === null ? null : gs(sp.rep) }; }),
+      v: 7, savedAt: Date.now(), seed: this.seed, s: this._s, t: this.t, nid: this.nid, spid: this.spid,
+      sps: [...keep].map(sp => {
+        const p = near(sp), live = sp.extinct === null;
+        const d = { id: sp.id, p: p ? p.id : null, a: sp.anc ? sp.anc.id : null, b: sp.born, x: sp.extinct, pop: sp.pop, pk: sp.peak, r: sp.recognized, h: Math.round(sp.hue), n: sp.name, g: sp.genus, m: rmean(sp.mean), tr: sp.trait || null };
+        if (live) Object.assign(d, { f: sp.founder, fs: sp.fSegs, fB: bs(sp.fB), pk2: sp.packs, pl: sp.plague || null, de: r2(sp.dayEat), ne: r2(sp.nightEat) });
+        return d;
+      }),
       act: [...this.active].map(sp => sp.id), rec: this.recognized.map(sp => sp.id),
       cr: this.creatures.map(c => ({ id: c.id, x: r2(c.x), y: r2(c.y), a: r2(c.a), g: gs(c.g), s: c.sp.id, e: r2(c.e), age: c.age, gen: c.gen, cool: c.cool, v: r2(c.v), ph: r2(c.ph), k: c.kills, ma: r2(c.maxAge), rc: c.rcool, cg: c.cultGen })),
       pl: this.plants.filter(p => !p.dead).map(p => [r2(p.x), r2(p.y), r2(p.e), p.age, Math.round(p.maxAge), r3(p.g.grow), r3(p.g.tough), r3(p.g.spread), r3(p.g.tpref), r3(p.g.landTol)]),
       meat: this.meat.filter(m => !m.dead).map(m => [r2(m.x), r2(m.y), r2(m.e), m.b]),
       vents: this.vents, climate: this.climate, ct: this.climateTarget, nc: this.nextClimate, ch: this.climateHold,
-      mg: this.maxGen, era: this.era, er: this.eraRank, ms, events: this.events, history: this.history,
-      names: [...this.names], genera: [...this.genera], rec2: this.record, blooms: this.blooms, lr: this.lastRefuge,
+      mg: this.maxGen, era: this.era, er: this.eraRank, ms, events: this.events, history: this.history.map(rh),
+      names: [...this.names].slice(-400), genera: [...this.genera], rec2: this.record, blooms: this.blooms, lr: this.lastRefuge,
       arch: this.archive.filter(a => keep.has(a.sp)).map(a => ({ sp: a.sp.id, g: gs(a.g), cx: a.cx, t: a.t })),
       cumO: this.cumO, oxyDip: this.oxyDip, sea: this.seaLevel, sf: this.seaFalling, ncat: this.nextCatastrophe, cats: this.catastrophes || 0
     };
@@ -1157,18 +1192,18 @@ class Sim {
   restore(o) {
     this._s = o.s; this.t = o.t; this.nid = o.nid; this.spid = o.spid;
     const byId = new Map();
-    for (const d of o.sps) byId.set(d.id, { id: d.id, parent: null, founder: d.f, fSegs: d.fs, fB: d.fB, born: d.b, extinct: d.x, pop: d.pop, peak: d.pk, recognized: d.r, hue: d.h, name: d.n, genus: d.g, mean: d.m, anc: null, trait: d.tr, rep: d.rep, packs: d.pk2 || 0, plague: d.pl, alarmT: 0, alarmS: 0, calmT: 0, calmS: 0, att: 0, esc: 0, dayEat: d.de || 0, nightEat: d.ne || 0, share: 0 });
+    for (const d of o.sps) byId.set(d.id, { id: d.id, parent: null, founder: d.f || null, fSegs: d.fs || null, fB: d.fB ? decBrain(d.fB) : null, born: d.b, extinct: d.x, pop: d.pop, peak: d.pk, recognized: d.r, hue: d.h, name: d.n, genus: d.g, mean: d.m, anc: null, trait: d.tr, rep: d.rep, packs: d.pk2 || 0, plague: d.pl, alarmT: 0, alarmS: 0, calmT: 0, calmS: 0, att: 0, esc: 0, dayEat: d.de || 0, nightEat: d.ne || 0, share: 0 });
     for (const d of o.sps) { const sp = byId.get(d.id); sp.parent = byId.get(d.p) || null; sp.anc = byId.get(d.a) || null; }
     for (const id of o.act) { const sp = byId.get(id); if (sp) this.active.add(sp); }
     for (const id of o.rec) { const sp = byId.get(id); if (sp) this.recognized.push(sp); }
     for (const d of o.cr) {
       const sp = byId.get(d.s); if (!sp) continue;
-      const c = newCreature(d.id, d.x, d.y, d.a, d.g, sp, d.e, d.age, d.gen, d.ph); c.cool = d.cool; c.rcool = d.rc || 0; c.v = d.v; c.kills = d.k || 0; c.cultGen = d.cg || 0;
+      const c = newCreature(d.id, d.x, d.y, d.a, decGenome(d.g), sp, d.e, d.age, d.gen, d.ph); c.cool = d.cool; c.rcool = d.rc || 0; c.v = d.v; c.kills = d.k || 0; c.cultGen = d.cg || 0;
       this.derive(c); c.e = d.e; c.maxAge = d.ma;
       if (!sp.rep) sp.rep = c.g;
       this.creatures.push(c);
     }
-    for (const sp of byId.values()) if (!sp.rep) sp.rep = Object.assign({ segs: sp.fSegs, B: sp.fB }, sp.founder);
+    for (const sp of byId.values()) if (!sp.rep && sp.fB) sp.rep = Object.assign({ segs: sp.fSegs, B: sp.fB }, sp.founder);
     this.plants = o.pl.map(a => newPlant(a[0], a[1], { grow: a[5], tough: a[6], spread: a[7], tpref: a[8], landTol: a[9] }, a[2], a[3], a[4]));
     this.meat = o.meat.map(a => newMeat(a[0], a[1], a[2], a[3]));
     this.vents = o.vents; this.climate = o.climate; this.climateTarget = o.ct; this.nextClimate = o.nc; this.climateHold = o.ch || 0;
@@ -1178,7 +1213,7 @@ class Sim {
     this.names = new Set(o.names || []); this.genera = new Set(o.genera || []);
     this.record = o.rec2 || { complexity: 0, name: null };
     this.blooms = o.blooms || []; this.lastRefuge = o.lr === undefined ? -1e9 : o.lr;
-    this.archive = (o.arch || []).map(a => ({ sp: byId.get(a.sp), g: a.g, cx: a.cx, t: a.t })).filter(a => a.sp);
+    this.archive = (o.arch || []).map(a => ({ sp: byId.get(a.sp), g: decGenome(a.g), cx: a.cx, t: a.t })).filter(a => a.sp);
     this.cumO = o.cumO; this.oxyDip = o.oxyDip || 0; this.oxygen = Math.max(0.03, 1 - Math.exp(-this.cumO / 1.5e6) - this.oxyDip);
     this.seaLevel = o.sea; this.seaFalling = o.sf; this.nextCatastrophe = o.ncat; this.catastrophes = o.cats || 0;
     this.terrainVer++;
@@ -1205,12 +1240,53 @@ const UM = 25; // micrometres per world unit
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const $ = id => document.getElementById(id);
 
-const SAVE_KEY = 'genesis-pool-save-v6';
+const SAVE_KEY = 'genesis-pool-save-v7', SAVE_VERSION = 7;
+const OLD_KEYS = ['genesis-pool-save-v1', 'genesis-pool-save-v2', 'genesis-pool-save-v3', 'genesis-pool-save-v4', 'genesis-pool-save-v5', 'genesis-pool-save-v6'];
 const CATCH_RATE = 90, CATCH_MAX = 12000; // ticks per real second at 1x, and the catch-up cap
-let storageOK = true, saved = null;
-try { const raw = localStorage.getItem(SAVE_KEY); saved = raw ? JSON.parse(raw) : null; } catch (e) { storageOK = false; saved = null; }
-let sim = null;
-if (saved && saved.v === 6) { try { sim = new Sim(saved.seed, saved); } catch (e) { sim = null; saved = null; } }
+
+/* ---------- saving: the browser's database first (large), quick storage as a backup copy ---------- */
+const store = (() => {
+  let ls = null;
+  try { const k = '__gp_probe'; localStorage.setItem(k, '1'); localStorage.removeItem(k); ls = localStorage; } catch (e) { ls = null; }
+  if (ls) for (const k of OLD_KEYS) { try { ls.removeItem(k); } catch (e) {} }
+  let dbp = null;
+  const db = () => dbp || (dbp = new Promise(res => {
+    try {
+      const rq = indexedDB.open('genesis-pool', 1);
+      rq.onupgradeneeded = () => { try { rq.result.createObjectStore('saves'); } catch (e) {} };
+      rq.onsuccess = () => res(rq.result); rq.onerror = () => res(null); rq.onblocked = () => res(null);
+    } catch (e) { res(null); }
+  }));
+  const idb = (mode, fn) => db().then(d => d ? new Promise(res => {
+    try { const tx = d.transaction('saves', mode), st = tx.objectStore('saves'); const out = fn(st); tx.oncomplete = () => res(out && out.result !== undefined ? out.result : true); tx.onerror = tx.onabort = () => res(null); }
+    catch (e) { res(null); }
+  }) : null);
+  if (window.indexedDB) idb('readwrite', st => { for (const k of OLD_KEYS) st.delete(k); });
+  const S = {
+    state: ls || window.indexedDB ? 'ok' : 'off', lastSaved: 0,
+    readQuick() { if (!ls) return null; try { return ls.getItem(SAVE_KEY); } catch (e) { return null; } },
+    readDb() { return window.indexedDB ? idb('readonly', st => st.get(SAVE_KEY)).then(v => typeof v === 'string' ? v : null) : Promise.resolve(null); },
+    write(str) {
+      let quickOK = false;
+      if (ls) {
+        if (str.length < 1500000) { try { ls.setItem(SAVE_KEY, str); quickOK = true; } catch (e) { try { ls.removeItem(SAVE_KEY); } catch (e2) {} } }
+        else { try { ls.removeItem(SAVE_KEY); } catch (e) {} }
+      }
+      if (quickOK) { S.state = 'ok'; S.lastSaved = Date.now(); }
+      const p = window.indexedDB ? idb('readwrite', st => st.put(str, SAVE_KEY)) : Promise.resolve(null);
+      return p.then(ok => {
+        if (ok) { S.state = 'ok'; S.lastSaved = Date.now(); }
+        else if (!quickOK) S.state = ls || window.indexedDB ? 'full' : 'off';
+        worldLine();
+      });
+    }
+  };
+  return S;
+})();
+let saved = null, sim = null, storeReady = false;
+const parseSave = raw => { try { const o = raw ? JSON.parse(raw) : null; return o && o.v === SAVE_VERSION ? o : null; } catch (e) { return null; } };
+saved = parseSave(store.readQuick());
+if (saved) { try { sim = new Sim(saved.seed, saved); } catch (e) { sim = null; saved = null; } }
 const isNewWorld = !sim;
 if (!sim) sim = new Sim((Math.random() * 1e9) | 0);
 const SPEEDS = [{ k: '½×', s: 0.75 }, { k: '1×', s: 1.5 }, { k: '4×', s: 6 }, { k: '12×', s: 18 }];
@@ -1414,7 +1490,7 @@ function draw() {
   ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
 
   // land and shallows
-  if (terrVer !== sim.terrainVer || terrSea !== sim.seaLevel && frame % 30 === 0) buildTerrainImage();
+  if (terrVer !== sim.terrainVer) buildTerrainImage();
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(terrCv, 0, 0, W, H);
 
@@ -1636,7 +1712,7 @@ $('reset').addEventListener('click', () => {
     catchUp = null; $('catch').hidden = true;
     writeSave();
     selected = null; follow = false; spot = null; $('inspect').hidden = true;
-    lastEvt = null; b.textContent = 'New world'; b.classList.remove('warn'); resetArm = 0;
+    lastEvt = null; spKey = ''; b.textContent = 'New world'; b.classList.remove('warn'); resetArm = 0;
     worldLine(); refreshSide(true);
     return;
   }
@@ -1644,43 +1720,57 @@ $('reset').addEventListener('click', () => {
   setTimeout(() => { if (Date.now() - resetArm >= 2900) { b.textContent = 'New world'; b.classList.remove('warn'); } }, 3000);
 });
 function worldLine() {
-  $('worldline').textContent = 'World ' + (sim.seed % 100000) + ' · ' + (storageOK ? 'autosaves in this browser and picks up where you left off' : 'this browser blocks saving, so it restarts when reopened');
+  const st = store.state, ago = store.lastSaved ? Math.round((Date.now() - store.lastSaved) / 1000) : null;
+  const msg = st === 'off' ? 'this browser or app has storage turned off, so the world restarts when reopened. Opening the link in Safari or Chrome keeps it'
+    : st === 'full' ? "this browser's storage is full, so the latest progress isn't being saved"
+    : ago === null ? 'autosaves in this browser and picks up where you left off'
+    : 'autosaved ' + (ago < 5 ? 'just now' : ago < 60 ? ago + 's ago' : Math.round(ago / 60) + ' min ago');
+  $('worldline').textContent = 'World ' + (sim.seed % 100000) + ' · ' + msg;
 }
 function writeSave() {
-  if (!storageOK || catchUp) return;
-  try {
-    const o = sim.snapshot(); o.paused = paused; o.speed = speedIdx;
-    localStorage.setItem(SAVE_KEY, JSON.stringify(o));
-  } catch (e) {
-    try { const o = sim.snapshot(); o.history = o.history.slice(-150); o.events = o.events.slice(-40); o.paused = paused; o.speed = speedIdx; localStorage.setItem(SAVE_KEY, JSON.stringify(o)); }
-    catch (e2) { storageOK = false; worldLine(); }
-  }
+  if (!storeReady || catchUp || store.state === 'off') return;
+  const o = sim.snapshot(); o.paused = paused; o.speed = speedIdx;
+  store.write(JSON.stringify(o));
 }
 setInterval(writeSave, 15000);
+setInterval(worldLine, 5000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') writeSave(); });
 window.addEventListener('pagehide', writeSave);
 worldLine();
 
 /* ---------- side panels ---------- */
 const spList = $('species');
+let spKey = '';
 function renderSpecies() {
   const live = [...sim.active].filter(s => s.recognized && s.pop > 0).sort((a, b) => b.pop - a.pop);
   const top = live.slice(0, 8);
   if (spot && !live.includes(spot)) spot = null;
   $('spNote').textContent = live.length > 8 ? 'top 8 of ' + live.length : 'largest first';
-  if (!top.length) { spList.innerHTML = '<li class="empty" style="cursor:default">No lineage has stabilized into a species yet.</li>'; return; }
+  if (!top.length) { spKey = ''; spList.innerHTML = '<li class="empty" style="cursor:default">No lineage has stabilized into a species yet.</li>'; return; }
+  // same species in the same order: update numbers in place so focus and hover are not lost every second
+  const key = top.map(s => s.id).join(',') + '|' + (spot ? spot.id : '');
+  if (key === spKey) {
+    top.forEach((sp, i) => {
+      const li = spList.children[i]; if (!li) return;
+      li.querySelector('.tr').textContent = traitLine(sp.mean);
+      li.querySelector('.n').firstChild.nodeValue = String(sp.pop);
+    });
+    return;
+  }
+  spKey = key;
   spList.innerHTML = '';
   for (const sp of top) {
     const li = document.createElement('li');
     li.tabIndex = 0; li.setAttribute('role', 'button'); li.setAttribute('aria-pressed', spot === sp);
     li.title = 'Highlight in the sea';
     const pc = document.createElement('canvas'); pc.width = 80; pc.height = 80;
-    portrait(pc, sp.rep, sp.hue);
+    if (sp.rep) portrait(pc, sp.rep, sp.hue);
     const mid = document.createElement('div');
     mid.innerHTML = `<div class="nm"></div><div class="tr"></div>`;
     mid.children[0].textContent = sp.name; mid.children[1].textContent = traitLine(sp.mean);
     const n = document.createElement('div'); n.className = 'n';
-    n.innerHTML = `${sp.pop}<small>since ${shortTime(sp.born)}</small>`;
+    n.appendChild(document.createTextNode(String(sp.pop)));
+    const sm = document.createElement('small'); sm.textContent = 'since ' + shortTime(sp.born); n.appendChild(sm);
     li.append(pc, mid, n);
     const toggle = () => { spot = spot === sp ? null : sp; renderSpecies(); };
     li.addEventListener('click', toggle);
@@ -1872,22 +1962,34 @@ function loop(now) {
   if (selected && now - lastInsp > 250) { lastInsp = now; renderInspector(false); }
   requestAnimationFrame(loop);
 }
-if (isNewWorld) {
-  // let the sea settle briefly so the first frame already shows life spreading
-  for (let i = 0; i < 240; i++) sim.step();
-  writeSave();
-} else {
-  if (typeof saved.speed === 'number' && SPEEDS[saved.speed]) { speedIdx = saved.speed; [...speedsEl.children].forEach((x, j) => x.setAttribute('aria-pressed', j === speedIdx)); }
-  if (saved.paused) setPaused(true);
-  const away = Math.max(0, (Date.now() - (saved.savedAt || Date.now())) / 1000);
+function applySave(o) {
+  if (typeof o.speed === 'number' && SPEEDS[o.speed]) { speedIdx = o.speed; [...speedsEl.children].forEach((x, j) => x.setAttribute('aria-pressed', j === speedIdx)); }
+  setPaused(!!o.paused);
+  const away = Math.max(0, (Date.now() - (o.savedAt || Date.now())) / 1000);
   const want = Math.floor(away * CATCH_RATE);
-  if (!saved.paused && want > 300) {
+  if (!o.paused && want > 300) {
     const total = Math.min(CATCH_MAX, want);
     catchUp = { left: total, total, t0: sim.t, capped: want > CATCH_MAX };
     $('catch').hidden = false;
   }
 }
-saved = null;
+if (isNewWorld) {
+  // let the sea settle briefly so the first frame already shows life spreading
+  for (let i = 0; i < 240; i++) sim.step();
+} else applySave(saved);
+// the database copy can be newer (or the only copy); check it before the first save can overwrite it
+store.readDb().then(raw => {
+  const o = parseSave(raw);
+  if (o && (!saved || (o.savedAt || 0) > (saved.savedAt || 0))) {
+    try {
+      sim = new Sim(o.seed, o);
+      selected = null; follow = false; spot = null; $('inspect').hidden = true; lastEvt = null; spKey = ''; terrVer = -1; catchUp = null;
+      applySave(o); refreshSide(true);
+    } catch (e) { /* keep the world already running */ }
+  }
+  saved = null; storeReady = true; worldLine();
+  if (isNewWorld && !o) writeSave();
+});
 refreshSide(true);
 requestAnimationFrame(loop);
 })();
